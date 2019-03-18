@@ -16,6 +16,7 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
     implementation 'com.github.inforion:kotlin-logging:v0.1.1'
     implementation 'com.github.inforion:kotlin-extensions:v0.1.0'
+    implementation 'com.github.pengrad:java-telegram-bot-api:4.1.1'
 }
 
 compileKotlin {
