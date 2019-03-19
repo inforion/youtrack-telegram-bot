@@ -13,6 +13,11 @@ repositories {
 }
 
 dependencies {
+    compile("com.fasterxml.jackson.module:jackson-module-kotlin:2.9.2")
+
+    compile group: 'org.simplejavamail', name: 'simple-java-mail', version: '4.1.1'
+    compile 'com.github.kittinunf.fuel:fuel:2.0.1'
+
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
     implementation 'com.github.inforion:kotlin-logging:v0.1.1'
     implementation 'com.github.inforion:kotlin-extensions:v0.1.0'
