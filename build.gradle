@@ -13,6 +13,8 @@ repositories {
 }
 
 dependencies {
+    testCompile group: 'org.slf4j', name: 'slf4j-log4j12', version: '1.7.26'
+
     compile("com.fasterxml.jackson.module:jackson-module-kotlin:2.9.2")
 
     compile group: 'org.simplejavamail', name: 'simple-java-mail', version: '4.1.1'

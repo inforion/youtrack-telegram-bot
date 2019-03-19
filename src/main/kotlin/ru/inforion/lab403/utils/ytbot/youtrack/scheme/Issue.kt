@@ -37,17 +37,9 @@ import com.google.gson.Gson
 //}
 
 data class Issue(
-//    val attachments: MutableCollection<IssueAttachment> = ArrayList(),
-//    val comments: String = "",
-    val commentsCount: Long = 0,
-    val created: Long = 0,
-    val description: String = "",
-    val id: String = ""
-) {
-
-    //User Deserializer
-    class Deserializer : ResponseDeserializable<Issue> {
-        override fun deserialize(content: String) = Gson().fromJson(content, Issue::class.java)
-    }
-
-}
+    val summary: String,
+    val commentsCount: Long,
+    val created: Long,
+    val description: String,
+    val id: String
+)

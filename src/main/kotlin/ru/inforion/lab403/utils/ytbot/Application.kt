@@ -33,10 +33,7 @@ class Application {
             configure(JsonParser.Feature.ALLOW_TRAILING_COMMA, true)
         }.readValue(File(path))
 
-        @JvmStatic
-        fun main(args: Array<String>) {
-            val config = loadConfig<Config>("temp/config.json")
-
+        private fun checkTelegram(config: Config) {
             val socketFactory = object : SocketFactory() {
                 override fun createSocket(): Socket {
                     if (config.proxy != null) {
@@ -70,10 +67,6 @@ class Application {
                 .okHttpClient(client)
                 .build()
 
-//            val youtrack = Youtrack(config.youtrack.baseUrl, config.youtrack.token)
-//
-//            youtrack.projects()
-
             val chatId = config.telegram.chatId
 
             val sticker = SendSticker(chatId, "CAADAgADphMAAulVBRire_9EQFdckwI")
@@ -101,6 +94,28 @@ class Application {
             bot.setUpdatesListener(listner)
 
             System.`in`.read()
+        }
+
+        private fun checkYoutrack(config: Config) {
+            val youtrack = Youtrack(config.youtrack.baseUrl, config.youtrack.token)
+
+            val projects = youtrack.projects("id", "name")
+            projects.forEach { println(it) }
+
+            val kcIdOnly = projects.first { it.name == "Kopycat" }
+
+            val kcAll = youtrack.project(kcIdOnly.id)
+            println(kcAll)
+
+            val issues = youtrack.issues(kcAll, "summary")
+            issues.forEach { println(it) }
+        }
+
+        @JvmStatic
+        fun main(args: Array<String>) {
+            val config = loadConfig<Config>("temp/config.json")
+            checkYoutrack(config)
+//            checkTelegram(config)
         }
     }
 }
