@@ -3,25 +3,25 @@ package ru.inforion.lab403.utils.ytbot
 import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
-import com.pengrad.telegrambot.TelegramBot
 import com.pengrad.telegrambot.UpdatesListener
 import com.pengrad.telegrambot.UpdatesListener.CONFIRMED_UPDATES_ALL
 import com.pengrad.telegrambot.request.SendMessage
 import com.pengrad.telegrambot.request.SendSticker
-import okhttp3.OkHttpClient
-import org.simplejavamail.mailer.internal.socks.socks5client.ProxyCredentials
-import org.simplejavamail.mailer.internal.socks.socks5client.Socks5
-import org.simplejavamail.mailer.internal.socks.socks5client.SocksSocket
+import net.sourceforge.argparse4j.inf.Namespace
+import net.sourceforge.argparse4j.internal.HelpScreenException
+import ru.inforion.lab403.common.extensions.argparser
 import ru.inforion.lab403.common.extensions.hexAsULong
+import ru.inforion.lab403.common.extensions.variable
 import ru.inforion.lab403.common.logging.logger
 import ru.inforion.lab403.utils.ytbot.config.Config
+import ru.inforion.lab403.utils.ytbot.config.YoutrackConfig
+import ru.inforion.lab403.utils.ytbot.telegram.TelegramProxy
 import ru.inforion.lab403.utils.ytbot.youtrack.Youtrack
+import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Issue
+import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Project
 import java.io.File
-import java.net.InetAddress
-import java.net.InetSocketAddress
-import java.net.Socket
 import java.util.logging.Level
-import javax.net.SocketFactory
+import kotlin.system.exitProcess
 
 
 class Application {
@@ -34,38 +34,10 @@ class Application {
         }.readValue(File(path))
 
         private fun checkTelegram(config: Config) {
-            val socketFactory = object : SocketFactory() {
-                override fun createSocket(): Socket {
-                    if (config.proxy != null) {
-                        val proxyAuth = Socks5(InetSocketAddress(config.proxy.host, config.proxy.port))
-                        if (config.proxy.auth != null)
-                            proxyAuth.credentials = ProxyCredentials(
-                                config.proxy.auth.username,
-                                config.proxy.auth.password)
-                        return SocksSocket(proxyAuth, proxyAuth.createProxySocket())
-                    }
-                    throw TODO("Now work only with proxy")
-                }
+            if (config.telegram == null)
+                throw RuntimeException("Telegram must not be null")
 
-                override fun createSocket(host: InetAddress, port: Int) =
-                    throw NotImplementedError("Won't be implemented")
-                override fun createSocket(address: String, port: Int, localAddress: InetAddress, localPort: Int) =
-                    throw NotImplementedError("Won't be implemented")
-                override fun createSocket(host: String, port: Int) =
-                    throw NotImplementedError("Won't be implemented")
-                override fun createSocket(host: InetAddress, port: Int, localHost: InetAddress, localPort: Int) =
-                    throw NotImplementedError("Won't be implemented")
-            }
-
-            val client = OkHttpClient
-                .Builder()
-                .socketFactory(socketFactory)
-                .build()
-
-            val bot = TelegramBot
-                .Builder(config.telegram.token)
-                .okHttpClient(client)
-                .build()
+            val bot = TelegramProxy(config.telegram.token, proxy = config.proxy)
 
             val chatId = config.telegram.chatId
 
@@ -76,7 +48,7 @@ class Application {
             val response = bot.execute(message)
             log.info { response.toString() }
 
-            val listner = UpdatesListener { updates ->
+            val listener = UpdatesListener { updates ->
                 updates.forEach {
                     log.info { it.toString() }
                     val recv = it.channelPost().text()
@@ -91,15 +63,15 @@ class Application {
                 }
                 CONFIRMED_UPDATES_ALL
             }
-            bot.setUpdatesListener(listner)
+            bot.setUpdatesListener(listener)
 
             System.`in`.read()
         }
 
-        private fun checkYoutrack(config: Config) {
-            val youtrack = Youtrack(config.youtrack.baseUrl, config.youtrack.token)
+        private fun checkYoutrack(config: YoutrackConfig) {
+            val youtrack = Youtrack(config.baseUrl, config.token)
 
-            val projects = youtrack.projects("id", "name")
+            val projects = youtrack.projects(Project::id, Project::name, Project::leader)
             projects.forEach { println(it) }
 
             val kcIdOnly = projects.first { it.name == "Kopycat" }
@@ -107,15 +79,46 @@ class Application {
             val kcAll = youtrack.project(kcIdOnly.id)
             println(kcAll)
 
-            val issues = youtrack.issues(kcAll, "summary")
-            issues.forEach { println(it) }
+            val issues = youtrack.issues(kcAll, Issue::idReadable, Issue::id)
+            issues.forEach { println("${it.idReadable} ${it.id}") }
+        }
+
+        private fun processProject(youtrack: Youtrack, project: Project, chatId: Long, bot: TelegramProxy) {
+            val issues = youtrack.issues(project)
+        }
+
+        private fun execute(config: Config) {
+            val youtrack = Youtrack(config.youtrack.baseUrl, config.youtrack.token)
+            val projects = youtrack.projects(Project::id, Project::name)
+
+            config.projects.forEach {
+                val bot = TelegramProxy(it.token)
+                val project = projects.first { project -> project.name == it.name }
+                processProject(youtrack, project, it.chatId, bot)
+            }
         }
 
         @JvmStatic
         fun main(args: Array<String>) {
-            val config = loadConfig<Config>("temp/config.json")
-            checkYoutrack(config)
-//            checkTelegram(config)
+            val parser = argparser(
+                "youtrack-telegram-bot",
+                "Telegram bot to pass from Youtrack to Telegram channel").apply {
+                variable<String>("-c", "--config", required = true, help = "Path to the configuration file")
+            }
+
+            val options: Namespace = try{
+                parser.parseArgs(args)
+            } catch (ex: HelpScreenException) {
+                exitProcess(0)
+            }
+
+            val configPath: String = options["config"]
+
+            val config = loadConfig<Config>(configPath)
+
+
+            checkYoutrack(config.youtrack)
+//            checkTelegram(config.telegram, config.proxy)
         }
     }
 }
