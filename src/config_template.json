@@ -1,0 +1,39 @@
+{
+  "telegram": {  // optional (for telegram check)
+    "token": "341342:xxxxxxxxxxx",
+    "chatId": -1,
+    "dry": true,  // don't send messages to Telegram just query Youtrack and parse
+  },
+  "projects": [
+    {
+      "name": "Kopycat",  // full Youtrack name (for in: filter)
+      "token": "341342:xxxxxxxxxxx",  // bot token for project Kopycat (e.i.)
+      "chatId": -1  // chat id for this bot
+    }
+  ],
+  "proxy": {  // optional
+    "host":  "8.8.8.8",
+    "port": 1111,
+    "auth": {  // optional
+      "username": "user",
+      "password": "pass"
+    }
+  },
+  "youtrack": {
+    "baseUrl": "https://server.ru/youtrack",
+    "token": "token" // bearer auth only
+  },
+  "minutesGroupInterval": 5,
+  "timestampFilePath": "temp/timestamp.txt",  // folder must exists
+  "descriptionMaxChars": 20,
+  "taggedCustomFields": ["Priority", "State"],  // for this field hash tag added before value
+  "assigneeFieldName": "Assignee",
+  "users": { // mapping from Youtrack user to Telegram user
+    "n.romanoff": "NatashaRomanoff",
+    "b.banner": "Hulk",
+    "c.hemsworth": "Thor",
+    "s.rogers": "SteveRogers",
+    "t.stark": "TonyStark",
+    "m.hacker": "MightyHacker"
+  }
+}

@@ -3,7 +3,7 @@ package ru.inforion.lab403.utils.ytbot.youtrack.scheme
 data class User(
     val avatarUrl: String,
     val banned: Boolean,
-    val email: String,
+    val email: String?,
     val fullName: String,
     val guest: Boolean,
     val jabberAccountName: String,

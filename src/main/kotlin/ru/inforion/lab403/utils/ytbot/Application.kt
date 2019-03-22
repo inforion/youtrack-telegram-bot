@@ -28,10 +28,10 @@ class Application {
     companion object {
         private val log = logger(Level.ALL)
 
-        private inline fun <reified T : Any> loadConfig(path: String): T = jacksonObjectMapper().apply {
+        private val mapper = jacksonObjectMapper().apply {
             configure(JsonParser.Feature.ALLOW_COMMENTS, true)
             configure(JsonParser.Feature.ALLOW_TRAILING_COMMA, true)
-        }.readValue(File(path))
+        }
 
         private fun checkTelegram(config: ApplicationConfig) {
             if (config.telegram == null)
@@ -80,19 +80,25 @@ class Application {
             issues.forEach { println("${it.idReadable} ${it.id}") }
         }
 
-        private fun execute(appConfig: ApplicationConfig) {
+        private fun execute(lastTimestamp: Long, appConfig: ApplicationConfig) {
             val youtrack = Youtrack(appConfig.youtrack.baseUrl, appConfig.youtrack.token)
-            val projects = youtrack.projects(fields(Project::id, Project::name))
-            val processor = Processor(youtrack)
+            val projects = youtrack.projects(fields(Project::id, Project::name, Project::shortName))
+            val processor = Processor(youtrack, lastTimestamp, appConfig)
 
-            appConfig.projects.forEach { projectConfig ->
+            appConfig.projects.map { projectConfig ->
                 val bot = TelegramProxy(projectConfig.token, proxy = appConfig.proxy)
                 val project = projects.first { it.name == projectConfig.name }
-                processor.processProject(project) {
-                    val message = SendMessage(projectConfig.chatId, it)
-                        .parseMode(ParseMode.Markdown)
-                    bot.execute(message)
-                    log.info(it)
+                processor.processProject(project) { data, activityTimestamp ->
+                    if (appConfig.telegram?.dry == false) {
+                        val message = SendMessage(projectConfig.chatId, data)
+                            .parseMode(ParseMode.Markdown)
+                        bot.execute(message)
+                    }
+                    if (appConfig.loadTimestamp() < activityTimestamp) {
+                        log.info { "Updating timestamp = $activityTimestamp" }
+                        appConfig.saveTimestamp(activityTimestamp)
+                    }
+                    log.fine(data)
                 }
             }
         }
@@ -103,6 +109,7 @@ class Application {
                 "youtrack-telegram-bot",
                 "Telegram bot to pass from Youtrack to Telegram channel").apply {
                 variable<String>("-c", "--config", required = true, help = "Path to the configuration file")
+                variable<Long>("-t", "--timestamp", required = false, help = "Last update timestamp")
             }
 
             val options: Namespace = try{
@@ -112,10 +119,15 @@ class Application {
             }
 
             val configPath: String = options["config"]
+            val timestamp: Long? = options["timestamp"]
 
-            val appConfig = loadConfig<ApplicationConfig>(configPath)
+            val appConfig = mapper.readValue<ApplicationConfig>(File(configPath))
 
-            execute(appConfig)
+            val lastTimestamp = timestamp ?: appConfig.loadTimestamp()
+
+            log.info { "Using timestamp = $lastTimestamp" }
+
+            execute(lastTimestamp, appConfig)
 
 //            checkYoutrack(appConfig.youtrack)
 //            checkTelegram(appConfig)

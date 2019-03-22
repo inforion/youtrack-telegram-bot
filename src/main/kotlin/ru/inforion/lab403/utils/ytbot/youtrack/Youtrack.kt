@@ -6,22 +6,43 @@ import com.github.kittinunf.fuel.httpGet
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import ru.inforion.lab403.common.logging.logger
-import ru.inforion.lab403.utils.ytbot.youtrack.categories.CategoryId
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.ActivitiesPage
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Issue
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Project
+import ru.inforion.lab403.utils.ytbot.youtrack.scheme.User
 import java.util.logging.Level
 
 class Youtrack(val baseUrl: String, val permToken: String) {
     companion object {
-        val log = logger(Level.FINER)
+        val log = logger(Level.INFO)
 
-        private inline fun <reified T> token() = object : TypeToken<T>() { }
+        inline fun <reified T> token() = object : TypeToken<T>() { }
     }
 
-    fun idHyperlink(idReadable: String?): String {
-        if (idReadable == null) return "#UNKNOWN"
-        return "[$idReadable]($baseUrl/issue/$idReadable) #T${idReadable.split('-')[1]}"
+    fun tagId(idReadable: String): String {
+        val tagId = idReadable.replace("-", "")
+        return "[#$tagId]($baseUrl/issue/$idReadable)"
+    }
+
+    fun tagUsername(login: String, name: String, email: String?, ringId: String?, map: Map<String, String>? = null): String {
+//        val nm = if (email != null)
+//            email.split("@")[0]
+//        else
+//            name.split(" ")[0]
+//        val tagName = nm.replace(".", "")
+
+        val tgTag = if (map != null) map[login] else null
+        val tagName = login.replace(".", "")
+        val nm = if (ringId == null) "#$tagName" else "[#$tagName]($baseUrl/users/$ringId)"
+
+        return if (tgTag != null) "$nm @$tgTag" else nm
+    }
+
+    fun tagUsername(user: User, map: Map<String, String>? = null)
+            = tagUsername(user.login, user.name, user.email, user.ringId, map)
+
+    fun tagActivity(categoryId: CategoryId): String {
+        return "#${categoryId.tag}"
     }
 
     fun queryRaw(
@@ -64,7 +85,9 @@ class Youtrack(val baseUrl: String, val permToken: String) {
             throw queryError!!.exception
 
         val bytes = queryBytes ?: throw RuntimeException("Empty query result received for $url...")
-        return bytes.toString(Charsets.UTF_8)
+        val result = bytes.toString(Charsets.UTF_8)
+        log.finest { "json = $result" }
+        return result
     }
 
     val mapper = Gson()
@@ -88,7 +111,6 @@ class Youtrack(val baseUrl: String, val permToken: String) {
         categories: Collection<CategoryId>? = null
     ): List<T> {
         val json = queryRaw(url, query, fields, categories)
-        log.fine { "result = $json" }
         return mapper.fromJson<List<T>>(json, token.type)
     }
 
