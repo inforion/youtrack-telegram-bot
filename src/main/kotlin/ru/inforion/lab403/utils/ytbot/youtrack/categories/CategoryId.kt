@@ -1,4 +1,4 @@
-package ru.inforion.lab403.utils.ytbot.youtrack
+package ru.inforion.lab403.utils.ytbot.youtrack.categories
 
 enum class CategoryId {
     CommentsCategory,
