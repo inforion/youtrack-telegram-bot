@@ -6,49 +6,29 @@ import com.github.kittinunf.fuel.httpGet
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import ru.inforion.lab403.common.logging.logger
-import ru.inforion.lab403.utils.ytbot.youtrack.scheme.ActivityItem
-import ru.inforion.lab403.utils.ytbot.youtrack.scheme.ActivityItemField
+import ru.inforion.lab403.utils.ytbot.youtrack.categories.CategoryId
+import ru.inforion.lab403.utils.ytbot.youtrack.scheme.ActivitiesPage
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Issue
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Project
-import java.lang.reflect.ParameterizedType
 import java.util.logging.Level
-import kotlin.reflect.KFunction
-import kotlin.reflect.KProperty1
-import kotlin.reflect.full.declaredMembers
-import kotlin.reflect.jvm.javaType
 
 class Youtrack(val baseUrl: String, val permToken: String) {
     companion object {
-        val log = logger(Level.FINE)
+        val log = logger(Level.FINER)
 
-        inline fun <reified T> Gson.fromJson(json: String) = fromJson<T>(json, object: TypeToken<T>() {}.type)
-        inline fun <reified T> Array<out KProperty1<T, *>>.names() = map { it.name }.toTypedArray()
+        private inline fun <reified T> token() = object : TypeToken<T>() { }
     }
 
-    inline fun <reified T> getFieldsFrom(fields: Collection<String>?): Collection<String>? {
-        if (fields == null)
-            return null
-
-        var result = T::class.declaredMembers
-            .filter { it !is KFunction<*> }
-            .map {
-                val jtype = it.returnType.javaType
-                val whatToCheck = if (jtype is ParameterizedType) jtype.actualTypeArguments.first() else jtype
-                val typeName = whatToCheck.typeName
-                val packageName = typeName.substringBeforeLast('.')
-                val postfix = if (packageName.endsWith("youtrack.scheme")) "(id)" else ""
-                it.name to postfix
-            }
-        if (fields.isNotEmpty())
-            result = result.filter { it.first in fields }
-        return result.map { "${it.first}${it.second}" }
+    fun idHyperlink(idReadable: String?): String {
+        if (idReadable == null) return "#UNKNOWN"
+        return "[$idReadable]($baseUrl/issue/$idReadable) #T${idReadable.split('-')[1]}"
     }
 
     fun queryRaw(
         url: String,
         query: String?,
-        categories: Collection<Category>?,
-        fields: Collection<String>?
+        fields: String?,
+        categories: Collection<CategoryId>?
     ): String {
         var queryError: FuelError? = null
         var queryBytes: ByteArray? = null
@@ -56,21 +36,24 @@ class Youtrack(val baseUrl: String, val permToken: String) {
         val parameters = mutableListOf<Pair<String, String>>()
 
         if (fields != null)
-            parameters.add("fields" to fields.joinToString())
+            parameters.add("fields" to fields)
 
         if (query != null)
             parameters.add("query" to query)
 
         if (categories != null)
-            parameters.add("categories" to categories.joinToString { it.name })
+            parameters.add("categories" to categories.joinToString(",") { it.name })
+
+        log.finer { "Requesting url=$url" }
+        parameters.forEach { log.fine { "${it.first} -> ${it.second}" } }
 
         val request = "$baseUrl/api/$url"
             .httpGet(parameters)
             .authentication()
             .bearer(permToken)
             .response { request, response, (bytes, error) ->
-                log.finer { request.toString() }
-                log.finer { response.toString() }
+                log.finest { request.toString() }
+                log.finest { response.toString() }
                 queryBytes = bytes
                 queryError = error
             }
@@ -87,44 +70,36 @@ class Youtrack(val baseUrl: String, val permToken: String) {
     val mapper = Gson()
 
     inline fun <reified T> querySingle(
+        token: TypeToken<T>,
         url: String,
-        fields: List<String>? = null,
-        query: String? = null
+        fields: String? = null,
+        query: String? = null,
+        categories: Collection<CategoryId>? = null
     ): T {
-        val filter = getFieldsFrom<T>(fields)
-        val json = queryRaw(url, query, null, filter)
-        return Gson().fromJson<T>(json)
+        val json = queryRaw(url, query, fields, categories)
+        return mapper.fromJson<T>(json, token.type)
     }
 
     inline fun <reified T> queryMultiple(
-        url: String,
         token: TypeToken<List<T>>,
-        fields: Collection<String>? = null,
-        categories: Collection<Category>? = null,
-        query: String? = null
+        url: String,
+        fields: String? = null,
+        query: String? = null,
+        categories: Collection<CategoryId>? = null
     ): List<T> {
-        val filter = getFieldsFrom<T>(fields)
-        val json = queryRaw(url, query, categories, filter)
+        val json = queryRaw(url, query, fields, categories)
+        log.fine { "result = $json" }
         return mapper.fromJson<List<T>>(json, token.type)
     }
 
-    private fun projects(vararg fields: String) =
-        queryMultiple("admin/projects", object : TypeToken<List<Project>>() { }, fields.toList())
+    fun projects(fields: String) = queryMultiple<Project>(token(), "admin/projects", fields)
 
-    fun projects(vararg fields: KProperty1<Project, *>) = projects(*fields.names())
+    fun issues(project: Project, fields: String)
+            = queryMultiple<Issue>(token(), "issues", fields, "in: ${project.name}")
 
-    fun project(projectID: String, vararg fields: String): Project =
-            querySingle("admin/projects/$projectID", fields.toList())
+    fun activitiesPage(issue: Issue, fields: String, categories: Collection<CategoryId>)
+            = querySingle<ActivitiesPage>(token(), "issues/${issue.id}/activitiesPage", fields, null, categories)
 
-    private fun issues(project: Project, vararg fields: String) =
-            queryMultiple("issues", object : TypeToken<List<Issue>>() { }, fields.toList(), query = "in: ${project.name}")
-
-    fun issues(project: Project, vararg fields: KProperty1<Issue, *>) = issues(project, *fields.names())
-
-//    private fun activities(issue: Issue, vararg fields: String, categories: Set<Category>): List<ActivityItem> {
-//        val catString = categories.joinToString { it.name }
-//        return queryMultiple("issues/${issue.id}/activitiesPage")
-//    }
-//
-//    fun activities(issue: Issue, vararg fields: KProperty1<ActivityItemField, *>) = activities()
+    fun project(projectID: String, fields: String)
+            = querySingle<Project>(token(), "admin/projects/$projectID", fields)
 }

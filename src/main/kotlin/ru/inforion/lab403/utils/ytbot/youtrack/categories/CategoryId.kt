@@ -1,6 +1,6 @@
 package ru.inforion.lab403.utils.ytbot.youtrack
 
-enum class Category {
+enum class CategoryId {
     CommentsCategory,
     AttachmentsCategory,
     AttachmentRenameCategory,

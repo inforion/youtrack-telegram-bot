@@ -5,6 +5,7 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.pengrad.telegrambot.UpdatesListener
 import com.pengrad.telegrambot.UpdatesListener.CONFIRMED_UPDATES_ALL
+import com.pengrad.telegrambot.model.request.ParseMode
 import com.pengrad.telegrambot.request.SendMessage
 import com.pengrad.telegrambot.request.SendSticker
 import net.sourceforge.argparse4j.inf.Namespace
@@ -13,12 +14,11 @@ import ru.inforion.lab403.common.extensions.argparser
 import ru.inforion.lab403.common.extensions.hexAsULong
 import ru.inforion.lab403.common.extensions.variable
 import ru.inforion.lab403.common.logging.logger
-import ru.inforion.lab403.utils.ytbot.config.Config
+import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
 import ru.inforion.lab403.utils.ytbot.config.YoutrackConfig
 import ru.inforion.lab403.utils.ytbot.telegram.TelegramProxy
-import ru.inforion.lab403.utils.ytbot.youtrack.Youtrack
-import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Issue
-import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Project
+import ru.inforion.lab403.utils.ytbot.youtrack.*
+import ru.inforion.lab403.utils.ytbot.youtrack.scheme.*
 import java.io.File
 import java.util.logging.Level
 import kotlin.system.exitProcess
@@ -33,7 +33,7 @@ class Application {
             configure(JsonParser.Feature.ALLOW_TRAILING_COMMA, true)
         }.readValue(File(path))
 
-        private fun checkTelegram(config: Config) {
+        private fun checkTelegram(config: ApplicationConfig) {
             if (config.telegram == null)
                 throw RuntimeException("Telegram must not be null")
 
@@ -68,33 +68,32 @@ class Application {
             System.`in`.read()
         }
 
-        private fun checkYoutrack(config: YoutrackConfig) {
-            val youtrack = Youtrack(config.baseUrl, config.token)
+        private fun checkYoutrack(appConfig: YoutrackConfig) {
+            val youtrack = Youtrack(appConfig.baseUrl, appConfig.token)
 
-            val projects = youtrack.projects(Project::id, Project::name, Project::leader)
+            val projects = youtrack.projects(fields(Project::id, Project::name, Project::leader))
             projects.forEach { println(it) }
 
-            val kcIdOnly = projects.first { it.name == "Kopycat" }
+            val kopycat = projects.first { it.name == "Kopycat" }
 
-            val kcAll = youtrack.project(kcIdOnly.id)
-            println(kcAll)
-
-            val issues = youtrack.issues(kcAll, Issue::idReadable, Issue::id)
+            val issues = youtrack.issues(kopycat, fields(Issue::idReadable, Issue::id))
             issues.forEach { println("${it.idReadable} ${it.id}") }
         }
 
-        private fun processProject(youtrack: Youtrack, project: Project, chatId: Long, bot: TelegramProxy) {
-            val issues = youtrack.issues(project)
-        }
+        private fun execute(appConfig: ApplicationConfig) {
+            val youtrack = Youtrack(appConfig.youtrack.baseUrl, appConfig.youtrack.token)
+            val projects = youtrack.projects(fields(Project::id, Project::name))
+            val processor = Processor(youtrack)
 
-        private fun execute(config: Config) {
-            val youtrack = Youtrack(config.youtrack.baseUrl, config.youtrack.token)
-            val projects = youtrack.projects(Project::id, Project::name)
-
-            config.projects.forEach {
-                val bot = TelegramProxy(it.token)
-                val project = projects.first { project -> project.name == it.name }
-                processProject(youtrack, project, it.chatId, bot)
+            appConfig.projects.forEach { projectConfig ->
+                val bot = TelegramProxy(projectConfig.token, proxy = appConfig.proxy)
+                val project = projects.first { it.name == projectConfig.name }
+                processor.processProject(project) {
+                    val message = SendMessage(projectConfig.chatId, it)
+                        .parseMode(ParseMode.Markdown)
+                    bot.execute(message)
+                    log.info(it)
+                }
             }
         }
 
@@ -114,11 +113,14 @@ class Application {
 
             val configPath: String = options["config"]
 
-            val config = loadConfig<Config>(configPath)
+            val appConfig = loadConfig<ApplicationConfig>(configPath)
 
+            execute(appConfig)
 
-            checkYoutrack(config.youtrack)
-//            checkTelegram(config.telegram, config.proxy)
+//            checkYoutrack(appConfig.youtrack)
+//            checkTelegram(appConfig)
         }
     }
 }
+
+

@@ -1,10 +1,10 @@
 package ru.inforion.lab403.utils.ytbot.youtrack.scheme
 
-data class ActivityItem(
-    val added: String,
+data class Activity(
+    val added: List<Added>,  // TODO: Make it right (works for LinkCategory)
     val author: User,
     val category: Category,
-    val field: ActivityItemField,
+    val field: ActivityField,
     val id: String,
     val removed: String,
     val target: Issue,
