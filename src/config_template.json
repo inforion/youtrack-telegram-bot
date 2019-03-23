@@ -30,9 +30,9 @@
   "activityCategories": ["IssueCreatedCategory"],  // or null for all
   "minutesGroupInterval": 5,
   "timestampFilePath": "temp/timestamp.txt",  // folder must exists
-  "descriptionMaxChars": 20,
+  "descriptionMaxChars": 500,
   "taggedCustomFields": ["Priority", "State"],  // for this field hash tag added before value
-  "assigneeFieldName": "Assignee",
+  "userCustomFields": ["Assignee", "Supervisor"],
   "filterIssues": [ "YT-100" ],  // optional (parse just specified issues, debug purpose)
   "users": { // mapping from Youtrack user to Telegram user
     "n.romanoff": { "id": null, "name": "NatashaRomanoff" },

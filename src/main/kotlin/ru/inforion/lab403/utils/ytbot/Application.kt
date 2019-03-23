@@ -6,6 +6,7 @@ import com.pengrad.telegrambot.request.SendMessage
 import net.sourceforge.argparse4j.inf.Namespace
 import net.sourceforge.argparse4j.internal.HelpScreenException
 import ru.inforion.lab403.common.extensions.argparser
+import ru.inforion.lab403.common.extensions.flag
 import ru.inforion.lab403.common.extensions.variable
 import ru.inforion.lab403.common.logging.logger
 import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
@@ -15,14 +16,16 @@ import ru.inforion.lab403.utils.ytbot.youtrack.Youtrack
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Project
 import java.io.File
 import java.util.logging.Level
+import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
 
 class Application {
     companion object {
-        private val log = logger(Level.ALL)
+        private val log = logger(Level.FINE)
 
-        private fun execute(lastTimestamp: Long, appConfig: ApplicationConfig) {
+        private fun execute(lastTimestamp: Long, dry: Boolean, appConfig: ApplicationConfig) {
+            log.finer { "Parsing Youtrack activity timestamp=$lastTimestamp dry=$dry" }
             val youtrack = Youtrack(appConfig.youtrack.baseUrl, appConfig.youtrack.token)
             val projects = youtrack.projects(
                 fields(
@@ -37,12 +40,12 @@ class Application {
                 val bot = TelegramProxy(projectConfig.token, proxy = appConfig.proxy)
                 val project = projects.first { it.name == projectConfig.name }
                 processor.processProject(project) { data, activityTimestamp ->
-                    if (appConfig.telegram?.dry == false) {
+                    if (!dry) {
                         val message = SendMessage(projectConfig.chatId, data)
                             .parseMode(ParseMode.Markdown)
-                        log.info { "Sending chatId = ${projectConfig.chatId} message $message" }
+                        log.finest { "Sending chatId = ${projectConfig.chatId} message $message" }
                         val response = bot.execute(message)
-                        log.warning { response.toString() }
+                        log.finest { response.toString() }
                     }
                     if (appConfig.loadTimestamp() < activityTimestamp) {
                         log.info { "Updating timestamp = $activityTimestamp" }
@@ -51,6 +54,37 @@ class Application {
                     log.fine(data)
                 }
             }
+        }
+
+        private fun daemonize(lastTimestamp: Long, daemon: Int, dry: Boolean, appConfig: ApplicationConfig) {
+            log.info { "Starting daemon... press enter to stop daemon" }
+
+            val lock = java.lang.Object()
+            var working = true
+            var currentLastTimestamp = lastTimestamp
+
+            val worker = thread {
+                synchronized(lock) {
+                    while (working) {
+                        execute(currentLastTimestamp, dry, appConfig)
+                        currentLastTimestamp = appConfig.loadTimestamp()
+                        lock.wait(daemon * 1000L)
+                    }
+                }
+            }
+
+            val reader = thread {
+                System.`in`.reader().read()
+                working = false
+                synchronized(lock) { lock.notifyAll() }
+            }
+
+            worker.join()
+
+            log.info { "Stopping youtrack-telegram-bot..." }
+
+            // If something goes wrong stop reader hardcore
+            System.`in`.close()
         }
 
         @JvmStatic
@@ -63,7 +97,9 @@ class Application {
                 "youtrack-telegram-bot",
                 "Telegram bot to pass from Youtrack to Telegram channel").apply {
                 variable<String>("-c", "--config", required = true, help = "Path to the configuration file")
-                variable<Long>("-t", "--timestamp", required = false, help = "Last update timestamp")
+                variable<Long>("-t", "--timestamp", required = false, help = "Redefine starting last update timestamp")
+                variable<Int>("-d", "--daemon", required = false, help = "Create daemon with specified update timeout in seconds (<= 86400)")
+                flag("-r", "--dry", help = "Dry run (don't send to Telegram)")
             }
 
             val options: Namespace = try {
@@ -74,16 +110,25 @@ class Application {
 
             val configPath: String = options["config"]
             val timestamp: Long? = options["timestamp"]
+            val dry: Boolean = options["dry"] ?: false
+            val daemon: Int = options["daemon"] ?: -1
+
+            if (daemon > 24 * 60 * 60) {
+                log.info { "Update period to slow..." }
+                exitProcess(-1)
+            }
 
             val appConfig = jsonConfigLoader.readValue<ApplicationConfig>(File(configPath))
 
-            val lastTimestamp = timestamp ?: appConfig.loadTimestamp()
-
-            log.info { "Using timestamp = $lastTimestamp" }
-
             log.info { "$appConfig" }
 
-            execute(lastTimestamp, appConfig)
+            val startingLastTimestamp = timestamp ?: appConfig.loadTimestamp()
+            log.info { "Starting last timestamp = $startingLastTimestamp" }
+            if (daemon > 0) {
+                daemonize(startingLastTimestamp, daemon, dry, appConfig)
+            } else {
+                execute(startingLastTimestamp, dry, appConfig)
+            }
         }
     }
 }

@@ -36,7 +36,7 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
          *
          * @return markdown URL
          */
-        private fun markdownUrl(url: String): String = "\\[[$ARROW_CHAR]($url)]"
+        private fun markdownUrl(url: String, inlineString: String = ARROW_CHAR): String = "\\[[$inlineString]($url)]"
     }
 
     /**
@@ -66,13 +66,13 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
             val tgUser = map[login]
             if (tgUser?.id != null) {
                 log.finest { "User with login = $login found -> telegram = $tgUser" }
-                val tgUserString = "[#$tagName](tg://user?id=${tgUser.id})"
+                val tgUserString = "[tg](tg://user?id=${tgUser.id}) #$tagName"
 
                 return if (ringId == null) tgUserString else
                     "$tgUserString${markdownUrl("$baseUrl/users/$ringId")}"
             }
 
-            log.warning { "User with login = $login not found in Youtrack-Telegram users mapping -> can't mention!" }
+            log.warning { "User with login = $login not found in Youtrack-Telegram users mapping" }
         }
         val tgUserString = "#$tagName"
         return if (ringId == null) tgUserString else
@@ -86,7 +86,18 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
      *
      * @return tagged activity category
      */
-    fun tagActivity(categoryId: CategoryId) = "#${categoryId.tag}"
+    fun tagCategory(categoryId: CategoryId) = "#${categoryId.tag}"
+
+    /**
+     * Creates activity link
+     *
+     * @param idReadable readable ID of issue activity
+     * @param activityId internal activity ID
+     *
+     * @return activity link
+     */
+    fun activityPermlink(idReadable: String, activityId: String, inlineString: String) =
+        markdownUrl("$baseUrl/issue/$idReadable#focus=streamItem-$activityId", inlineString)
 
     /**
      * Make query and get response from Youtrack REST
@@ -245,4 +256,15 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
      */
     fun project(projectID: String, fields: String)
             = querySingle<Project>(token(), "admin/projects/$projectID", fields)
+
+    /**
+     * Request from Youtrack issue with [issueID] and specified [fields]
+     *
+     * NOTE: Functions fields and with in extensions.kt may be used to create [fields] string
+     *
+     * @param issueID issue ID to request
+     * @param fields requested fields in Youtrack REST format
+     */
+    fun issue(issueID: String, fields: String)
+            = querySingle<Issue>(token(), "issues/$issueID", fields)
 }

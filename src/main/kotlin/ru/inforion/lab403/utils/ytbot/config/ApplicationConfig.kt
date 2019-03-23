@@ -4,7 +4,6 @@ import ru.inforion.lab403.utils.ytbot.youtrack.CategoryId
 import java.io.File
 
 data class ApplicationConfig(
-    val telegram: TelegramConfig?,
     val proxy: ProxyConfig?,
     val youtrack: YoutrackConfig,
     val projects: List<ProjectConfig>,
@@ -12,7 +11,7 @@ data class ApplicationConfig(
     val timestampFilePath: String,
     val descriptionMaxChars: Int,
     val taggedCustomFields: List<String>,
-    val assigneeFieldName: String,
+    val userCustomFields: List<String>,
     val users: Map<String, TelegramUserConfig>?,
     val activityCategories: List<CategoryId>?,
     val filterIssues: List<String>?

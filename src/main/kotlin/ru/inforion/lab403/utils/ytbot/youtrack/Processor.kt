@@ -1,8 +1,7 @@
 package ru.inforion.lab403.utils.ytbot.youtrack
 
 import com.google.gson.internal.LinkedTreeMap
-import com.pengrad.telegrambot.model.request.ParseMode
-import com.pengrad.telegrambot.request.SendMessage
+import ru.inforion.lab403.common.extensions.emptyString
 import ru.inforion.lab403.common.extensions.stretch
 import ru.inforion.lab403.common.logging.logger
 import ru.inforion.lab403.utils.ytbot.*
@@ -39,9 +38,49 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         throw RuntimeException("Added or Removed must be not empty!")
     }
 
+    private fun processInternalCustomField(presentation: String, value: LinkedTreeMap<String, String>?): String {
+        if (value == null)
+            return "$presentation: -"
+
+        val data = value["name"]!!
+        val second = when (presentation) {
+            in appConfig.userCustomFields -> {
+                val login = value["login"]!!
+                val ringId = value["ringId"]
+                youtrack.tagUsername(login, ringId, appConfig.users)
+            }
+            // Add hash tag to specific fields
+            in appConfig.taggedCustomFields -> {
+                "#${data.removeChars(' ', '-', '.')}"
+            }
+            else -> data
+        }
+        return "$presentation: $second"
+    }
+
+    private fun processInternalDescription(description: String?) =
+        if (description != null)
+            if (description.length > appConfig.descriptionMaxChars)
+                "${description.stretch(appConfig.descriptionMaxChars)}..."
+            else description
+        else emptyString
+
     private fun processIssueCreatedActivity(project: Project, activity: Activity): String {
-//        activity.target.customFields.forEach { println(it.name) }
-        return activity.target.summary
+        val fields = fields(
+            Issue::id,
+            Issue::summary,
+            Issue::description,
+            Issue::fields.with("name", "value(name,login,ringId)")
+        )
+        val issue = youtrack.issue(activity.target.id, fields)
+        val stringFields = issue.fields.joinToString("\n ") {
+            @Suppress("UNCHECKED_CAST")
+            val value = it.value as LinkedTreeMap<String, String>?
+            processInternalCustomField(it.name, value)
+        }
+        val vDesc = processInternalDescription(issue.description)
+        val vvDesc = if (vDesc.isNotBlank()) "\n$vDesc" else ""
+        return "${issue.summary}$vvDesc\n $stringFields"
     }
 
     private fun processLinkActivity(project: Project, activity: Activity) = processAddedRemoved(activity) {
@@ -74,8 +113,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
     private fun processIssueResolved(project: Project, activity: Activity) = "#${activity.targetMember}"
 
     private fun processDescription(project: Project, activity: Activity): String {
-        val description = activity.added as String
-        return "${description.stretch(appConfig.descriptionMaxChars)}..."
+        return processInternalDescription(activity.added as String?)
     }
 
     private fun processAttachments(project: Project, activity: Activity) = processAddedRemoved(activity) {
@@ -90,27 +128,17 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
 
     private fun processCustomField(project: Project, activity: Activity): String {
         val presentation = activity.field.presentation
-
-        if (activity.added is ArrayList<*> || activity.removed is ArrayList<*>) {
-            return processAddedRemoved(activity) {
-                val name = it[0]["name"]!!
-
-                return@processAddedRemoved if (presentation == appConfig.assigneeFieldName) {
-                    val login = it[0]["login"]!!
-                    val ringId = it[0]["ringId"]!!
-                    youtrack.tagUsername(login, ringId, appConfig.users)
-                } else {
-
-                    // Add hash tag to some fields
-                    if (presentation !in appConfig.taggedCustomFields) name else "#${name.removeChars(' ')}"
-                }
-            }
+        return if (activity.added is ArrayList<*> || activity.removed is ArrayList<*>) {
+            processAddedRemoved(activity) { processInternalCustomField(presentation, it[0]) }
         } else {
-            return "$presentation -> Added: ${activity.added} Removed: ${activity.removed}"
+            "$presentation -> Added: ${activity.added} Removed: ${activity.removed}"
         }
     }
 
-    private fun processUnknownActivity(project: Project, activity: Activity) = "Something has been done..."
+    private fun processUnknownActivity(project: Project, activity: Activity): String {
+        log.severe { "Don't what to do with ${activity.category.id}!" }
+        return "Something has been done..."
+    }
 
     private fun getProcessorBy(category: Category) = when (category.id) {
         CategoryId.IssueCreatedCategory -> this::processIssueCreatedActivity
@@ -121,11 +149,12 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         CategoryId.DescriptionCategory -> this::processDescription
         CategoryId.AttachmentsCategory -> this::processAttachments
         CategoryId.CustomFieldCategory -> this::processCustomField
+
         else -> this::processUnknownActivity
     }
-    
+
     private fun processActivitiesByCategory(
-        target: Issue,
+        issue: Issue,
         date: Date,
         project: Project,
         author: User,
@@ -142,13 +171,14 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
 
         val result = buildString {
             val coarseDate = sdfCoarse.format(date)
-            val tagId = youtrack.tagId(target.idReadable)
+            val tagId = youtrack.tagId(issue.idReadable)
             val tagName = youtrack.tagUsername(author.login, author.ringId, appConfig.users)
-            val tagActivity = youtrack.tagActivity(category.id)
-            append("$coarseDate $tagId $tagName $tagActivity")
+            val tagCategory = youtrack.tagCategory(category.id)
+            append("$coarseDate $tagId $tagName $tagCategory")
             timestamp = activities.map {
                 val fineTime = sdfFine.format(Date(it.timestamp))
-                append("\n - [$fineTime] ${processor(project, it)}")
+                val activityPermlink = youtrack.activityPermlink(issue.idReadable, it.id, fineTime)
+                append("\n- $activityPermlink ${processor(project, it)}")
                 it.timestamp
             }.max() ?: 0
         }
@@ -207,7 +237,8 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
                             CustomField::name
                         ),
                         Issue::idReadable,
-                        Issue::summary
+                        Issue::summary,
+                        Issue::id
                     )
                 )
             ),
@@ -244,7 +275,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
     }
 
     fun processProject(project: Project, block: (String, Long) -> Unit) {
-        log.info { "Processing project: ${project.id} ${project.name} ${project.shortName}" }
+        log.finer { "Processing project: ${project.id} ${project.name} ${project.shortName}" }
 
         val issues = youtrack.issues(
             project,

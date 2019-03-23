@@ -1,6 +1,7 @@
 package ru.inforion.lab403.utils.ytbot.youtrack.scheme
 
 data class CustomField(
+    val value: Any,
     val aliases: String,
     val fieldDefaults: CustomFieldDefaults,
     val fieldType: String,

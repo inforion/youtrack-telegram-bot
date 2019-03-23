@@ -19,12 +19,11 @@ class CheckTelegram {
         fun main(args: Array<String>) {
             val config = jsonConfigLoader.readValue<ApplicationConfig>(File("temp/config.json"))
 
-            if (config.telegram == null)
-                throw RuntimeException("Telegram must not be null")
+            val projectConfig = config.projects.first()
 
-            val bot = TelegramProxy(config.telegram.token, proxy = config.proxy)
+            val bot = TelegramProxy(projectConfig.token, proxy = config.proxy)
 
-            val chatId = config.telegram.chatId
+            val chatId = projectConfig.chatId
 
 //            val sticker = SendSticker(chatId, "CAADAgADphMAAulVBRire_9EQFdckwI")
 //            bot.execute(sticker)
