@@ -23,17 +23,23 @@
     "baseUrl": "https://server.ru/youtrack",
     "token": "token" // bearer auth only
   },
+//  SummaryCategory, PermittedGroupCategory, CustomFieldCategory, IssueCreatedCategory,
+//  AttachmentsCategory, IssueResolvedCategory, CommentsCategory, VcsChangeCategory,
+//  LinksCategory, SprintCategory, DescriptionCategory, AttachmentRenameCategory,
+//  ProjectCategory, TagsCategory
+  "activityCategories": ["IssueCreatedCategory"],  // or null for all
   "minutesGroupInterval": 5,
   "timestampFilePath": "temp/timestamp.txt",  // folder must exists
   "descriptionMaxChars": 20,
   "taggedCustomFields": ["Priority", "State"],  // for this field hash tag added before value
   "assigneeFieldName": "Assignee",
+  "filterIssues": [ "YT-100" ],  // optional (parse just specified issues, debug purpose)
   "users": { // mapping from Youtrack user to Telegram user
-    "n.romanoff": "NatashaRomanoff",
-    "b.banner": "Hulk",
-    "c.hemsworth": "Thor",
-    "s.rogers": "SteveRogers",
-    "t.stark": "TonyStark",
-    "m.hacker": "MightyHacker"
+    "n.romanoff": { "id": null, "name": "NatashaRomanoff" },
+    "b.banner": { "id": 111555, "name": "Hulk" },
+    "c.hemsworth": { "id": 555111, "name": "Thor" },
+    "s.rogers": { "id": null, "name": "SteveRogers" },
+    "t.stark": { "id": null, "name": "TonyStark" },
+    "m.hacker": { "id": null, "name": "MightyHacker" }
   }
 }

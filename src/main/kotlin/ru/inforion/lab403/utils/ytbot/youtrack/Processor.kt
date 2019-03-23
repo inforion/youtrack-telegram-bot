@@ -1,12 +1,13 @@
 package ru.inforion.lab403.utils.ytbot.youtrack
 
 import com.google.gson.internal.LinkedTreeMap
+import com.pengrad.telegrambot.model.request.ParseMode
+import com.pengrad.telegrambot.request.SendMessage
 import ru.inforion.lab403.common.extensions.stretch
 import ru.inforion.lab403.common.logging.logger
-import ru.inforion.lab403.utils.ytbot.Application
+import ru.inforion.lab403.utils.ytbot.*
 import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.*
-import java.io.File
 import java.lang.RuntimeException
 import java.text.SimpleDateFormat
 import java.util.*
@@ -94,16 +95,14 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
             return processAddedRemoved(activity) {
                 val name = it[0]["name"]!!
 
-                if (presentation == appConfig.assigneeFieldName) {
+                return@processAddedRemoved if (presentation == appConfig.assigneeFieldName) {
                     val login = it[0]["login"]!!
                     val ringId = it[0]["ringId"]!!
                     youtrack.tagUsername(login, ringId, appConfig.users)
                 } else {
 
                     // Add hash tag to some fields
-                    val tag = if (presentation in appConfig.taggedCustomFields) "#" else ""
-
-                    "$tag$name"
+                    if (presentation !in appConfig.taggedCustomFields) name else "#${name.removeChars(' ')}"
                 }
             }
         } else {
@@ -124,7 +123,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         CategoryId.CustomFieldCategory -> this::processCustomField
         else -> this::processUnknownActivity
     }
-
+    
     private fun processActivitiesByCategory(
         target: Issue,
         date: Date,
@@ -136,7 +135,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
     ) {
         val processor = getProcessorBy(category)
 
-        val sdfCoarse = SimpleDateFormat("dd.MM.YYYY HH:mm")
+        val sdfCoarse = SimpleDateFormat("dd.MM.YYYY")
         val sdfFine = SimpleDateFormat("HH:mm:ss")
 
         var timestamp: Long = 0
@@ -212,7 +211,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
                     )
                 )
             ),
-            CategoryId.values().toSet()
+            appConfig.activityCategories ?: enumValuesCollection()
         )
 
         val allIssueActivities = activitiesPage.activities
@@ -221,7 +220,6 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         val timeGroupInterval = 60000 * minutesGroupInterval
 
         allIssueActivities
-//            .filter { it.category.id == CategoryId.CommentsCategory }
             .filter { it.timestamp > lastUpdateTimestamp }
             .groupSeriesBy { it.author }
             .forEach { (author, authorActivities) ->
@@ -258,11 +256,13 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
             )
         )
 
-        issues
+        val filteredIssues = if (appConfig.filterIssues == null) issues else {
+            log.warning { "Issues filter specified: ${appConfig.filterIssues}" }
+            issues.filter { it.idReadable in appConfig.filterIssues }
+        }
+
+        filteredIssues
             .filter { it.updated > lastUpdateTimestamp }
-//            .filter { it.idReadable == "KC-1243" }
-//            .filter { it.idReadable == "KC-1109" }
-            .filter { it.idReadable == "KC-1250" }
             .forEach { processIssue(it, project, block) }
     }
 }

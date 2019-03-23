@@ -6,10 +6,11 @@ import com.github.kittinunf.fuel.httpGet
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import ru.inforion.lab403.common.logging.logger
+import ru.inforion.lab403.utils.ytbot.config.TelegramUserConfig
+import ru.inforion.lab403.utils.ytbot.removeChars
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.ActivitiesPage
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Issue
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Project
-import ru.inforion.lab403.utils.ytbot.youtrack.scheme.User
 import java.util.logging.Level
 
 class Youtrack(val baseUrl: String, private val permToken: String) {
@@ -22,6 +23,20 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
          * NOTE: Originally this function required only for List<T> object mapping
          */
         private inline fun <reified T> token() = object : TypeToken<T>() { }
+
+        /**
+         * Symbol ⇗
+         */
+        private const val ARROW_CHAR = "\u21D7"
+
+        /**
+         * Make markdown URL like: [⇗](url)
+         *
+         * @param url URL to make
+         *
+         * @return markdown URL
+         */
+        private fun markdownUrl(url: String): String = "\\[[$ARROW_CHAR]($url)]"
     }
 
     /**
@@ -33,7 +48,7 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
      */
     fun tagId(idReadable: String): String {
         val tagId = idReadable.removeChars('-')
-        return "[#$tagId]($baseUrl/issue/$idReadable)"
+        return "#$tagId${markdownUrl("$baseUrl/issue/$idReadable")}"
     }
 
     /**
@@ -45,18 +60,23 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
      *
      * @return tagged user name with Telegram mention
      */
-    fun tagUsername(login: String, ringId: String?, map: Map<String, String>? = null): String {
+    fun tagUsername(login: String, ringId: String?, map: Map<String, TelegramUserConfig>? = null): String {
         val tagName = login.removeChars('_', '.')
         if (map != null) {
-            val tgUsername = map[login]
-            if (tgUsername != null) {
-                log.finest { "User with login = $login found -> telegram = $tgUsername" }
-                return "[#$tagName](mention:@$tgUsername)"
+            val tgUser = map[login]
+            if (tgUser?.id != null) {
+                log.finest { "User with login = $login found -> telegram = $tgUser" }
+                val tgUserString = "[#$tagName](tg://user?id=${tgUser.id})"
+
+                return if (ringId == null) tgUserString else
+                    "$tgUserString${markdownUrl("$baseUrl/users/$ringId")}"
             }
 
             log.warning { "User with login = $login not found in Youtrack-Telegram users mapping -> can't mention!" }
         }
-        return "#$tagName"
+        val tgUserString = "#$tagName"
+        return if (ringId == null) tgUserString else
+            "$tgUserString${markdownUrl("$baseUrl/users/$ringId")}"
     }
 
     /**

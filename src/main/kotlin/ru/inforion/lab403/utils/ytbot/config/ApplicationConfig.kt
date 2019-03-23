@@ -1,5 +1,6 @@
 package ru.inforion.lab403.utils.ytbot.config
 
+import ru.inforion.lab403.utils.ytbot.youtrack.CategoryId
 import java.io.File
 
 data class ApplicationConfig(
@@ -12,7 +13,9 @@ data class ApplicationConfig(
     val descriptionMaxChars: Int,
     val taggedCustomFields: List<String>,
     val assigneeFieldName: String,
-    val users: Map<String, String>?
+    val users: Map<String, TelegramUserConfig>?,
+    val activityCategories: List<CategoryId>?,
+    val filterIssues: List<String>?
 ) {
     fun saveTimestamp(timestamp: Long) {
         File(timestampFilePath).writeText(timestamp.toString())
