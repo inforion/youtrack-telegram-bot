@@ -12,39 +12,72 @@ import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Project
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.User
 import java.util.logging.Level
 
-class Youtrack(val baseUrl: String, val permToken: String) {
+class Youtrack(val baseUrl: String, private val permToken: String) {
     companion object {
         val log = logger(Level.INFO)
 
-        inline fun <reified T> token() = object : TypeToken<T>() { }
+        /**
+         * Function to short call for generate object type token for Gson library
+         *
+         * NOTE: Originally this function required only for List<T> object mapping
+         */
+        private inline fun <reified T> token() = object : TypeToken<T>() { }
     }
 
+    /**
+     * Creates tagged issue ID with link to Youtrack
+     *
+     * @param idReadable readable ID of issue from Youtrack
+     *
+     * @return tagged issue ID
+     */
     fun tagId(idReadable: String): String {
-        val tagId = idReadable.replace("-", "")
+        val tagId = idReadable.removeChars('-')
         return "[#$tagId]($baseUrl/issue/$idReadable)"
     }
 
-    fun tagUsername(login: String, name: String, email: String?, ringId: String?, map: Map<String, String>? = null): String {
-//        val nm = if (email != null)
-//            email.split("@")[0]
-//        else
-//            name.split(" ")[0]
-//        val tagName = nm.replace(".", "")
+    /**
+     * Creates tagged user name from login and Youtrack-Telegram mapping
+     *
+     * @param login user login in Youtrack
+     * @param ringId user Hub connection (not used currently) perhaps make link to user in Youtrack
+     * @param map Youtrack-Telegram mapping (from JSON-configuration)
+     *
+     * @return tagged user name with Telegram mention
+     */
+    fun tagUsername(login: String, ringId: String?, map: Map<String, String>? = null): String {
+        val tagName = login.removeChars('_', '.')
+        if (map != null) {
+            val tgUsername = map[login]
+            if (tgUsername != null) {
+                log.finest { "User with login = $login found -> telegram = $tgUsername" }
+                return "[#$tagName](mention:@$tgUsername)"
+            }
 
-        val tgTag = if (map != null) map[login] else null
-        val tagName = login.replace(".", "")
-        val nm = if (ringId == null) "#$tagName" else "[#$tagName]($baseUrl/users/$ringId)"
-
-        return if (tgTag != null) "$nm @$tgTag" else nm
+            log.warning { "User with login = $login not found in Youtrack-Telegram users mapping -> can't mention!" }
+        }
+        return "#$tagName"
     }
 
-    fun tagUsername(user: User, map: Map<String, String>? = null)
-            = tagUsername(user.login, user.name, user.email, user.ringId, map)
+    /**
+     * Creates tagged activity category name
+     *
+     * @param categoryId activity category (enum)
+     *
+     * @return tagged activity category
+     */
+    fun tagActivity(categoryId: CategoryId) = "#${categoryId.tag}"
 
-    fun tagActivity(categoryId: CategoryId): String {
-        return "#${categoryId.tag}"
-    }
-
+    /**
+     * Make query and get response from Youtrack REST
+     *
+     * @param url request url
+     * @param query filter query string
+     * @param fields request fields (if not specified just IDs will be returned)
+     * @param categories request categories (relevant for activities)
+     *
+     * @return JSON string response from Youtrack
+     */
     fun queryRaw(
         url: String,
         query: String?,
@@ -90,9 +123,29 @@ class Youtrack(val baseUrl: String, val permToken: String) {
         return result
     }
 
-    val mapper = Gson()
+    /**
+     * JSON mapper that use Fuel library.
+     * Gson can ignore omitted fields in JSON (Jackson can't)
+     */
+    private val mapper = Gson()
 
-    inline fun <reified T> querySingle(
+    /**
+     * Query from Youtrack single object and map it to specified type
+     *
+     * NOTE: due to type erasure (even with reified) we can't pass type from upper functions
+     *       like projects, issues and etc. so should use this quirk with token.
+     *       May be it's Kotlin bug, may be I don't understand something...
+     *
+     * @param token token to determine type
+     *
+     * @param url request url
+     * @param query filter query string
+     * @param fields request fields (if not specified just IDs will be returned)
+     * @param categories request categories (relevant for activities)
+     *
+     * @return single Youtrack object
+     */
+    private inline fun <reified T> querySingle(
         token: TypeToken<T>,
         url: String,
         fields: String? = null,
@@ -103,7 +156,23 @@ class Youtrack(val baseUrl: String, val permToken: String) {
         return mapper.fromJson<T>(json, token.type)
     }
 
-    inline fun <reified T> queryMultiple(
+    /**
+     * Query from Youtrack multiple object and map it to specified type (i.e. list of issues)
+     *
+     * NOTE: due to type erasure (even with reified) we can't pass type from upper functions
+     *       like projects, issues and etc. so should use this quirk with token.
+     *       May be it's Kotlin bug, may be I don't understand something...
+     *
+     * @param token token to determine type
+     *
+     * @param url request url
+     * @param query filter query string
+     * @param fields request fields (if not specified just IDs will be returned)
+     * @param categories request categories (relevant for activities)
+     *
+     * @return collection of Youtrack objects
+     */
+    private inline fun <reified T> queryMultiple(
         token: TypeToken<List<T>>,
         url: String,
         fields: String? = null,
@@ -114,14 +183,46 @@ class Youtrack(val baseUrl: String, val permToken: String) {
         return mapper.fromJson<List<T>>(json, token.type)
     }
 
+    /**
+     * Request from Youtrack all projects with specified [fields]
+     *
+     * NOTE: Functions fields and with in extensions.kt may be used to create [fields] string
+     *
+     * @param fields requested fields in Youtrack REST format
+     */
     fun projects(fields: String) = queryMultiple<Project>(token(), "admin/projects", fields)
 
+    /**
+     * Request from Youtrack issues for specified [project] and with specified [fields]
+     *
+     * NOTE: Functions fields and with in extensions.kt may be used to create [fields] string
+     *
+     * @param project Youtrack project (Project name must not be null!)
+     * @param fields requested fields in Youtrack REST format
+     */
     fun issues(project: Project, fields: String)
             = queryMultiple<Issue>(token(), "issues", fields, "in: ${project.name}")
 
+    /**
+     * Request from Youtrack activity page for specified [issue], [categories] and with specified [fields]
+     *
+     * NOTE: Functions fields and with in extensions.kt may be used to create [fields] string
+     *
+     * @param issue Youtrack issue to get activities (Issue ID must not be null!)
+     * @param fields requested fields in Youtrack REST format
+     * @param categories issue activity categories (see enum)
+     */
     fun activitiesPage(issue: Issue, fields: String, categories: Collection<CategoryId>)
             = querySingle<ActivitiesPage>(token(), "issues/${issue.id}/activitiesPage", fields, null, categories)
 
+    /**
+     * Request from Youtrack project with [projectID] and specified [fields]
+     *
+     * NOTE: Functions fields and with in extensions.kt may be used to create [fields] string
+     *
+     * @param projectID project ID to request
+     * @param fields requested fields in Youtrack REST format
+     */
     fun project(projectID: String, fields: String)
             = querySingle<Project>(token(), "admin/projects/$projectID", fields)
 }

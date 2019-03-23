@@ -31,10 +31,17 @@ fun KProperty<*>.with(vararg args: Any) = "$name(${fields(*args)})"
 /**
  * Finding non-breaking sequences with [selector] in collection [this]
  *
- * A1, A2, A3, B1, B2, B3, A4, A5
- * A to (1, 2, 3)
- * B to (1, 2, 3)
- * A to (4, 5)
+ * input:
+ *  [ A1, A2, A3, B1, B2, B3, A4, A5 ]
+ * selector:
+ *  { it.first() }
+ * output:
+ *  [ A to (A1, A2, A3)
+ *    B to (B1, B2, B3)
+ *    A to (B4, B5) ]
+ *
+ * @param selector lambda returning grouping "key" value
+ * @return grouped list
  */
 fun <S, T> Collection<T>.groupSeriesBy(selector: (T) -> S): List<Pair<S, Collection<T>>> {
     if (this.isEmpty())
@@ -51,3 +58,22 @@ fun <S, T> Collection<T>.groupSeriesBy(selector: (T) -> S): List<Pair<S, Collect
     }
     return result
 }
+
+/**
+ * Removes all specified characters [chars] from string [this]
+ *
+ * @param chars characters to be removed
+ * @return string without characters [chars]
+ */
+fun String.removeChars(vararg chars: Char, ignoreCase: Boolean = false) = chars.fold(this) { result, char ->
+    result.replace("$char", "", ignoreCase)
+}
+
+/**
+ * Removes all specified characters in string [chars] from string [this]
+ *
+ * @param chars characters string that to be removed from string [this]
+ * @return string without characters [chars]
+ */
+fun String.removeChars(chars: String, ignoreCase: Boolean = false)
+        = removeChars(*chars.toCharArray(), ignoreCase = ignoreCase)

@@ -96,9 +96,8 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
 
                 if (presentation == appConfig.assigneeFieldName) {
                     val login = it[0]["login"]!!
-                    val email = it[0]["email"]
                     val ringId = it[0]["ringId"]!!
-                    youtrack.tagUsername(login, name, email, ringId, appConfig.users)
+                    youtrack.tagUsername(login, ringId, appConfig.users)
                 } else {
 
                     // Add hash tag to some fields
@@ -145,7 +144,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         val result = buildString {
             val coarseDate = sdfCoarse.format(date)
             val tagId = youtrack.tagId(target.idReadable)
-            val tagName = youtrack.tagUsername(author, appConfig.users)
+            val tagName = youtrack.tagUsername(author.login, author.ringId, appConfig.users)
             val tagActivity = youtrack.tagActivity(category.id)
             append("$coarseDate $tagId $tagName $tagActivity")
             timestamp = activities.map {
