@@ -16,6 +16,9 @@ import kotlin.collections.ArrayList
 class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appConfig: ApplicationConfig) {
     companion object {
         val log = logger(Level.FINE)
+
+        private fun crop(string: String, size: Int) =
+            if (string.length <= size) string else "${string.stretch(size)}..."
     }
 
     private fun processAddedRemoved(activity: Activity, block: (ArrayList<LinkedTreeMap<String, String>>) -> String): String {
@@ -59,11 +62,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
     }
 
     private fun processInternalDescription(description: String?) =
-        if (description != null)
-            if (description.length > appConfig.descriptionMaxChars)
-                "${description.stretch(appConfig.descriptionMaxChars)}..."
-            else description
-        else emptyString
+        if (description != null) crop(description, appConfig.descriptionMaxChars) else emptyString
 
     private fun processIssueCreatedActivity(project: Project, activity: Activity): String {
         val fields = fields(
@@ -169,9 +168,10 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         val result = buildString {
             val coarseDate = sdfCoarse.format(date)
             val tagId = youtrack.tagId(issue.idReadable)
-            val tagName = youtrack.tagUsername(author.login, author.ringId, appConfig.users)
+            val tagUsername = youtrack.tagUsername(author.login, author.ringId, appConfig.users)
             val tagCategory = youtrack.tagCategory(category.id)
-            append("$coarseDate $tagId $tagName $tagCategory")
+            val summary = crop(issue.summary, appConfig.descriptionMaxChars)
+            append("$coarseDate $tagId $summary $tagUsername $tagCategory")
             timestamp = activities.map {
                 val fineTime = sdfFine.format(Date(it.timestamp))
                 val activityPermlink = youtrack.activityPermlink(issue.idReadable, it.id, fineTime)

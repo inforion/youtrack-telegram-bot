@@ -27,11 +27,23 @@
     "baseUrl": "https://server.ru/youtrack",
     "token": "token" // bearer auth only
   },
-//  SummaryCategory, PermittedGroupCategory, CustomFieldCategory, IssueCreatedCategory,
-//  AttachmentsCategory, IssueResolvedCategory, CommentsCategory, VcsChangeCategory,
-//  LinksCategory, SprintCategory, DescriptionCategory, AttachmentRenameCategory,
-//  ProjectCategory, TagsCategory
-  "activityCategories": ["IssueCreatedCategory"],  // or null for all
+  // or null for all
+  "activityCategories": [
+    "SummaryCategory",
+    "PermittedGroupCategory",
+    "CustomFieldCategory",
+    "IssueCreatedCategory",
+    "AttachmentsCategory",
+    //    "IssueResolvedCategory",
+    "CommentsCategory",
+    "VcsChangeCategory",
+    "LinksCategory",
+    "SprintCategory",
+    "DescriptionCategory",
+    "AttachmentRenameCategory",
+    "ProjectCategory",
+    "TagsCategory"
+  ],
   "minutesGroupInterval": 5,
   "timestampFilePath": "temp/timestamp.txt",  // folder must exists
   "descriptionMaxChars": 500,
