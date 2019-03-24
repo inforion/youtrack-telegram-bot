@@ -24,6 +24,8 @@ class Application {
     companion object {
         private val log = logger(Level.FINE)
 
+        private val bots = mutableMapOf<String, TelegramProxy>()
+
         private fun execute(lastTimestamp: Long, dry: Boolean, appConfig: ApplicationConfig) {
             log.finer { "Parsing Youtrack activity timestamp=$lastTimestamp dry=$dry" }
             val youtrack = Youtrack(appConfig.youtrack.baseUrl, appConfig.youtrack.token)
@@ -36,14 +38,14 @@ class Application {
             )
             val processor = Processor(youtrack, lastTimestamp, appConfig)
 
-            appConfig.projects.map { projectConfig ->
-                val bot = TelegramProxy(projectConfig.token, proxy = appConfig.proxy)
-                val project = projects.first { it.name == projectConfig.name }
+            appConfig.projects.map { prjConf ->
+                val bot = bots.getOrPut(prjConf.name) { TelegramProxy(prjConf.token, appConfig.proxy) }
+                val project = projects.first { it.name == prjConf.name }
                 processor.processProject(project) { data, activityTimestamp ->
                     if (!dry) {
-                        val message = SendMessage(projectConfig.chatId, data)
+                        val message = SendMessage(prjConf.chatId, data)
                             .parseMode(ParseMode.Markdown)
-                        log.finest { "Sending chatId = ${projectConfig.chatId} message $message" }
+                        log.finest { "Sending chatId = ${prjConf.chatId} message $message" }
                         val response = bot.execute(message)
                         log.finest { response.toString() }
                     }
@@ -73,6 +75,7 @@ class Application {
                 }
             }
 
+            @Suppress("UNUSED_VARIABLE")
             val reader = thread {
                 System.`in`.reader().read()
                 working = false

@@ -1,7 +1,13 @@
 package ru.inforion.lab403.utils.ytbot.config
 
+import ru.inforion.lab403.utils.ytbot.Application
 import ru.inforion.lab403.utils.ytbot.youtrack.CategoryId
 import java.io.File
+import java.net.URISyntaxException
+import sun.net.www.ParseUtil.toURI
+import java.security.CodeSource
+
+
 
 data class ApplicationConfig(
     val proxy: ProxyConfig?,
