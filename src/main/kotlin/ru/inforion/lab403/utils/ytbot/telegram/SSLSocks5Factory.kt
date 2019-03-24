@@ -9,17 +9,13 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import javax.net.SocketFactory
 
-class SSLSocks5Factory(val proxy: ProxyConfig?) : SocketFactory() {
+class SSLSocks5Factory(private val proxy: ProxyConfig) : SocketFactory() {
     override fun createSocket(): Socket {
-        if (proxy == null)
-            return Socket()
-
         val proxyAuth = Socks5(InetSocketAddress(proxy.host, proxy.port))
         if (proxy.auth != null)
             proxyAuth.credentials = ProxyCredentials(proxy.auth.username, proxy.auth.password)
 
         return SocksSocket(proxyAuth, proxyAuth.createProxySocket())
-
     }
 
     override fun createSocket(host: InetAddress, port: Int) =

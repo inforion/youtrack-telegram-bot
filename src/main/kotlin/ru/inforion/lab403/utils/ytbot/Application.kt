@@ -89,10 +89,6 @@ class Application {
 
         @JvmStatic
         fun main(args: Array<String>) {
-//            val dns = System.getProperty("sun.net.spi.nameservice.nameservers")
-//            System.setProperty("sun.net.spi.nameservice.nameservers", "8.8.8.8")
-//            System.setProperty("sun.net.spi.nameservice.provider.1", "dns,sun")
-
             val parser = argparser(
                 "youtrack-telegram-bot",
                 "Telegram bot to pass from Youtrack to Telegram channel").apply {
@@ -100,6 +96,8 @@ class Application {
                 variable<Long>("-t", "--timestamp", required = false, help = "Redefine starting last update timestamp")
                 variable<Int>("-d", "--daemon", required = false, help = "Create daemon with specified update timeout in seconds (<= 86400)")
                 flag("-r", "--dry", help = "Dry run (don't send to Telegram)")
+                variable<String>("-tgc", "--check-telegram", required = false, help = "Send message to telegram and exit. Format [chatId:message]")
+                variable<String>("-ytc", "--check-youtrack", required = false, help = "Get project info from Youtrack. Format [projectName]")
             }
 
             val options: Namespace = try {
@@ -108,22 +106,49 @@ class Application {
                 exitProcess(0)
             }
 
+            log.info { options.toString() }
+
             val configPath: String = options["config"]
             val timestamp: Long? = options["timestamp"]
             val dry: Boolean = options["dry"] ?: false
             val daemon: Int = options["daemon"] ?: -1
+            val checkTelegram: String? = options["check_telegram"]
+            val checkYoutrack: String? = options["check_youtrack"]
+
+            val appConfig = jsonConfigLoader.readValue<ApplicationConfig>(File(configPath))
+
+            var inCheckMode = false
+
+            if (checkTelegram != null) {
+                log.warning { "Starting Telegram connection check with $checkTelegram" }
+                val telegramChecker = TelegramChecker(appConfig)
+                val data = checkTelegram.split(":")
+                // if unknown type -> start server
+                telegramChecker.check(project = data[0], type = data[1], message = data[2])
+                inCheckMode = true
+            }
+
+            if (checkYoutrack != null) {
+                log.warning { "Starting Youtrack connection check with $checkTelegram" }
+                val youtrackChecker = YoutrackChecker(appConfig)
+                youtrackChecker.check(project = checkYoutrack)
+                inCheckMode = true
+            }
+
+            if (inCheckMode) {
+                log.info { "youtrack-telegram-bot was in check mode... exiting" }
+                exitProcess(0)
+            }
 
             if (daemon > 24 * 60 * 60) {
                 log.info { "Update period to slow..." }
                 exitProcess(-1)
             }
 
-            val appConfig = jsonConfigLoader.readValue<ApplicationConfig>(File(configPath))
-
             log.info { "$appConfig" }
 
             val startingLastTimestamp = timestamp ?: appConfig.loadTimestamp()
-            log.info { "Starting last timestamp = $startingLastTimestamp" }
+            log.info { "Starting last timestamp = $startingLastTimestamp dry = $dry" }
             if (daemon > 0) {
                 daemonize(startingLastTimestamp, daemon, dry, appConfig)
             } else {

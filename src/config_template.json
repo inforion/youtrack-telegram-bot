@@ -17,6 +17,10 @@
     "auth": {  // optional
       "username": "user",
       "password": "pass"
+    },
+    "dns": {  // optional (resolve Telegram IP using specified DNS) WARNING: Certificate won't check in this case!
+      "ip": "8.8.8.8",
+      "port": 53
     }
   },
   "youtrack": {

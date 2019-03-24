@@ -2,6 +2,9 @@ package ru.inforion.lab403.utils.ytbot
 
 import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import ru.inforion.lab403.common.extensions.asInt
+import ru.inforion.lab403.common.extensions.asULong
+import ru.inforion.lab403.common.extensions.get
 import java.util.ArrayList
 import kotlin.reflect.KProperty
 
@@ -87,3 +90,8 @@ fun String.removeChars(vararg chars: Char, ignoreCase: Boolean = false) = chars.
  */
 fun String.removeChars(chars: String, ignoreCase: Boolean = false)
         = removeChars(*chars.toCharArray(), ignoreCase = ignoreCase)
+
+@Suppress("EmptyRange")
+inline val Int.asIPAddress get() = "${this[31..24]}.${this[23..16]}.${this[15..8]}.${this[7..0]}"
+
+inline val Long.asIPAddress get() = asInt.asIPAddress

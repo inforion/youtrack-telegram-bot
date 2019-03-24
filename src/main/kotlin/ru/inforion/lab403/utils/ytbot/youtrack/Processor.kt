@@ -104,10 +104,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
 
         val tagged = text.replace("#${project.shortName}-", "#${project.shortName}")
 
-        return if (urls != null)
-            "Added commit: [$tagged]($urls)"
-        else
-            "Added commit: $tagged"
+        return if (urls != null) "Added commit: [$tagged]($urls)" else "Added commit: $tagged"
     }
 
     private fun processIssueResolved(project: Project, activity: Activity) = "#${activity.targetMember}"
