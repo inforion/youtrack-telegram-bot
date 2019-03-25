@@ -194,7 +194,13 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
             timestamp = activities.map {
                 val time = sdfFine.format(Date(it.timestamp))
                 val activityPermlink = youtrack.activityPermlink(issue.idReadable, it.id, time)
-                append("\n- $activityPermlink ${processor(project, issue, it)}")
+                val activityText = try {
+                    processor(project, issue, it)
+                } catch (e: Throwable) {
+                    log.severe { "Critical error: ${e.message}: ${e.stackTrace}" }
+                    "Unexpected error occurred: ${e.message}. See log..."
+                }
+                append("\n- $activityPermlink $activityText")
                 it.timestamp
             }.max() ?: 0
         }
