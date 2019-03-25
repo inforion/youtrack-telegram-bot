@@ -66,7 +66,7 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
             val tgUser = map[login]
             if (tgUser?.id != null) {
                 log.finest { "User with login = $login found -> telegram = $tgUser" }
-                val tgUserString = "[user](tg://user?id=${tgUser.id}) #$tagName"
+                val tgUserString = "[u](tg://user?id=${tgUser.id})\\#$tagName"
 
                 return if (ringId == null) tgUserString else
                     "$tgUserString${markdownUrl("$baseUrl/users/$ringId")}"
