@@ -15,7 +15,7 @@ Features:
 ## Installation
 
 Install Oracle JVM version 1.8 or above.  
-Download and extract .tar file to any directory with permission access and create `temp` directory:
+Download and extract .tar file to any folder with permission access and create `temp` folder:
 
 ```
 tar -xvf youtrack-telegram-bot-x.y.z.tar -C <youtrack-telegram-bot>
@@ -23,7 +23,7 @@ cd <youtrack-telegram-bot>
 mkdir temp
 ```
  - *x.y.z* - version of package
- - *youtrack-telegram-bot* - application directory
+ - *youtrack-telegram-bot* - application folder
  
 Download [config_template.json](https://github.com/inforion/youtrack-telegram-bot/blob/master/src/config_template.json), rename it to `config.json` and move it to <youtrack-telegram-bot>/temp folder. Edit `config.json` according to your settings.
 
