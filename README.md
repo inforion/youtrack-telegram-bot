@@ -2,7 +2,7 @@
 
 ## Description
 
-youtrack-telegram-bot is a [Telegram](https://telegram.org/) Bot for JetBrains YouTrack server (tested with Youtrack 2019.1). Written in Kotlin, JVM for back-end. Youtrack-bot connects to a specified YouTrack server, queries specified project activity issues, parses and posts them to a specified telegram chat. 
+youtrack-telegram-bot is a [Telegram](https://telegram.org/) Bot for JetBrains YouTrack server (tested with Youtrack 2019.1). Written in Kotlin, JVM for back-end. Youtrack-telegram-bot connects to a specified YouTrack server, queries specified project activity issues, parses and posts them to a specified telegram chat. 
 
 Features:
 - configurable projects and chats
