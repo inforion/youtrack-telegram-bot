@@ -1,17 +1,9 @@
 package ru.inforion.lab403.utils.ytbot
 
-import com.fasterxml.jackson.core.JsonParser
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import ru.inforion.lab403.common.extensions.asInt
-import ru.inforion.lab403.common.extensions.asULong
 import ru.inforion.lab403.common.extensions.get
-import java.util.ArrayList
+import java.util.*
 import kotlin.reflect.KProperty
-
-val jsonConfigLoader = jacksonObjectMapper().apply {
-    configure(JsonParser.Feature.ALLOW_COMMENTS, true)
-    configure(JsonParser.Feature.ALLOW_TRAILING_COMMA, true)
-}
 
 inline fun <reified T: Enum<T>>enumValuesCollection(collection: MutableCollection<T> = mutableListOf()) =
     enumValues<T>().toCollection(collection)

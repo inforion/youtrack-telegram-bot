@@ -1,8 +1,5 @@
 package ru.inforion.lab403.utils.ytbot
 
-import com.fasterxml.jackson.module.kotlin.readValue
-import com.pengrad.telegrambot.model.request.ParseMode
-import com.pengrad.telegrambot.request.SendMessage
 import net.sourceforge.argparse4j.inf.Namespace
 import net.sourceforge.argparse4j.internal.HelpScreenException
 import ru.inforion.lab403.common.extensions.argparser
@@ -10,11 +7,6 @@ import ru.inforion.lab403.common.extensions.flag
 import ru.inforion.lab403.common.extensions.variable
 import ru.inforion.lab403.common.logging.logger
 import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
-import ru.inforion.lab403.utils.ytbot.telegram.TelegramProxy
-import ru.inforion.lab403.utils.ytbot.youtrack.Processor
-import ru.inforion.lab403.utils.ytbot.youtrack.Youtrack
-import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Project
-import java.io.File
 import java.util.logging.Level
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
@@ -24,52 +16,26 @@ class Application {
     companion object {
         private val log = logger(Level.FINE)
 
-        private val bots = mutableMapOf<String, TelegramProxy>()
-
-        private fun execute(lastTimestamp: Long, dry: Boolean, appConfig: ApplicationConfig) {
-            log.finer { "Parsing Youtrack activity timestamp=$lastTimestamp dry=$dry" }
-            val youtrack = Youtrack(appConfig.youtrack.baseUrl, appConfig.youtrack.token)
-            val projects = youtrack.projects(
-                fields(
-                    Project::id,
-                    Project::name,
-                    Project::shortName
-                )
-            )
-            val processor = Processor(youtrack, lastTimestamp, appConfig)
-
-            appConfig.projects.map { prjConf ->
-                val bot = bots.getOrPut(prjConf.name) { TelegramProxy(prjConf.token, appConfig.proxy) }
-                val project = projects.first { it.name == prjConf.name }
-                processor.processProject(project) { data, activityTimestamp ->
-                    if (!dry) {
-                        val message = SendMessage(prjConf.chatId, data)
-                            .parseMode(ParseMode.Markdown)
-                        log.finest { "Sending chatId = ${prjConf.chatId} message $message" }
-                        val response = bot.execute(message)
-                        log.finest { response.toString() }
-                    }
-                    if (appConfig.loadTimestamp() < activityTimestamp) {
-                        log.info { "Updating timestamp = $activityTimestamp" }
-                        appConfig.saveTimestamp(activityTimestamp)
-                    }
-                    log.fine(data)
-                }
-            }
-        }
-
-        private fun daemonize(lastTimestamp: Long, daemon: Int, dry: Boolean, appConfig: ApplicationConfig) {
+        private fun daemonize(
+            bot: YoutrackTelegramBot,
+            daemon: Int,
+            dontSendMessages: Boolean,
+            dontStartServices: Boolean
+        ) {
             log.info { "Starting daemon... press enter to stop daemon" }
 
             val lock = java.lang.Object()
             var working = true
-            var currentLastTimestamp = lastTimestamp
+            var currentLastTimestamp = bot.startLastTimestamp
+
+            if (dontStartServices)
+                bot.createCommandServices()
 
             val worker = thread {
                 synchronized(lock) {
                     while (working) {
-                        execute(currentLastTimestamp, dry, appConfig)
-                        currentLastTimestamp = appConfig.loadTimestamp()
+                        bot.execute(dontSendMessages, currentLastTimestamp)
+                        currentLastTimestamp = bot.loadCurrentLastTimestamp()
                         lock.wait(daemon * 1000L)
                     }
                 }
@@ -98,7 +64,8 @@ class Application {
                 variable<String>("-c", "--config", required = true, help = "Path to the configuration file")
                 variable<Long>("-t", "--timestamp", required = false, help = "Redefine starting last update timestamp")
                 variable<Int>("-d", "--daemon", required = false, help = "Create daemon with specified update timeout in seconds (<= 86400)")
-                flag("-r", "--dry", help = "Dry run (don't send to Telegram)")
+                flag("-r", "--dont-send-messages", help = "Don't send messages to Telegram")
+                flag("-a", "--dont-start-services", help = "Don't start command services for Telegram when in daemon mode")
                 variable<String>("-tgc", "--check-telegram", required = false, help = "Send message to telegram and exit. Format [chatId:message]")
                 variable<String>("-ytc", "--check-youtrack", required = false, help = "Get project info from Youtrack. Format [projectName]")
             }
@@ -113,12 +80,13 @@ class Application {
 
             val configPath: String = options["config"]
             val timestamp: Long? = options["timestamp"]
-            val dry: Boolean = options["dry"] ?: false
+            val tgSendMessages: Boolean = !(options["dont_send_messages"] ?: false)
+            val tgStartServices: Boolean = !(options["dont_start_service"] ?: false)
             val daemon: Int = options["daemon"] ?: -1
             val checkTelegram: String? = options["check_telegram"]
             val checkYoutrack: String? = options["check_youtrack"]
 
-            val appConfig = jsonConfigLoader.readValue<ApplicationConfig>(File(configPath))
+            val appConfig = ApplicationConfig.load(configPath)
 
             var inCheckMode = false
 
@@ -160,11 +128,13 @@ class Application {
                     exitProcess(-1)
                 }
 
-            log.info { "Starting last timestamp = $startingLastTimestamp dry = $dry" }
+            val bot = YoutrackTelegramBot(startingLastTimestamp, appConfig)
+
+            log.info { "Starting last timestamp=$startingLastTimestamp send=$tgSendMessages services=$tgStartServices" }
             if (daemon > 0) {
-                daemonize(startingLastTimestamp, daemon, dry, appConfig)
+                daemonize(bot, daemon, tgSendMessages, tgStartServices)
             } else {
-                execute(startingLastTimestamp, dry, appConfig)
+                bot.execute(tgSendMessages)
             }
         }
     }

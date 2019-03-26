@@ -3,6 +3,7 @@ package ru.inforion.lab403.utils.ytbot.youtrack
 import com.github.kittinunf.fuel.core.FuelError
 import com.github.kittinunf.fuel.core.extensions.authentication
 import com.github.kittinunf.fuel.httpGet
+import com.github.kittinunf.fuel.httpPost
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import ru.inforion.lab403.common.logging.logger
@@ -121,10 +122,10 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
         val parameters = mutableListOf<Pair<String, String>>()
 
         if (fields != null)
-            parameters.add("fields" to fields)
+            parameters.add("fields" to fields.trim())
 
         if (query != null)
-            parameters.add("query" to query)
+            parameters.add("query" to query.trim())
 
         if (categories != null)
             parameters.add("categories" to categories.joinToString(",") { it.name })
@@ -146,7 +147,7 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
         request.join()
 
         if (queryError != null)
-            throw queryError!!.exception
+            throw RuntimeException(queryError!!.exception)
 
         val bytes = queryBytes ?: throw RuntimeException("Empty query result received for $url...")
         val result = bytes.toString(Charsets.UTF_8)
@@ -220,8 +221,22 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
      * NOTE: Functions fields and with in extensions.kt may be used to create [fields] string
      *
      * @param fields requested fields in Youtrack REST format
+     * @param query additional query for request
      */
-    fun projects(fields: String) = queryMultiple<Project>(token(), "admin/projects", fields)
+    fun projects(fields: String, query: String = "")
+            = queryMultiple<Project>(token(), "admin/projects", fields, query)
+
+    /**
+     * Request from Youtrack issues for specified [project] and with specified [fields]
+     *
+     * NOTE: Functions fields and with in extensions.kt may be used to create [fields] string
+     *
+     * @param project Youtrack project name
+     * @param fields requested fields in Youtrack REST format
+     * @param query additional query for request
+     */
+    fun issues(project: String, fields: String, query: String = "")
+            = queryMultiple<Issue>(token(), "issues", fields, "in: $project $query")
 
     /**
      * Request from Youtrack issues for specified [project] and with specified [fields]
@@ -230,9 +245,9 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
      *
      * @param project Youtrack project (Project name must not be null!)
      * @param fields requested fields in Youtrack REST format
+     * @param query additional query for request
      */
-    fun issues(project: Project, fields: String)
-            = queryMultiple<Issue>(token(), "issues", fields, "in: ${project.name}")
+    fun issues(project: Project, fields: String, query: String = "") = issues(project.name, fields, query)
 
     /**
      * Request from Youtrack activity page for specified [issue], [categories] and with specified [fields]
@@ -267,4 +282,55 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
      */
     fun issue(issueID: String, fields: String)
             = querySingle<Issue>(token(), "issues/$issueID", fields)
+
+    /**
+     * Request Youtrack to execute command for issue with [issueID]
+     *
+     * WARNING: Using old REST API currently!
+     */
+    fun command(
+        issueID: String,
+        command: String? = null,
+        comment: String? = null,
+        group: String? = null,
+        disableNotifications: Boolean = false,
+        runAs: String? = null
+    ) {
+        val url = "/rest/issue/$issueID/execute"
+
+        val parameters = mutableListOf<Pair<String, String>>()
+
+        if (command != null)
+            parameters.add("command" to command.trim())
+        else if (comment != null) {
+            parameters.add("command" to "comment")
+            parameters.add("comment" to comment.trim())
+        } else throw IllegalArgumentException("command or comment must be set!")
+
+        if (group != null)
+            parameters.add("group" to group.trim())
+
+        if (disableNotifications)
+            parameters.add("disableNotifications" to disableNotifications.toString())
+
+        if (runAs != null)
+            parameters.add("runAs" to runAs.trim())
+
+        var queryError: FuelError? = null
+
+        val request = "$baseUrl$url"
+            .httpPost(parameters)
+            .authentication()
+            .bearer(permToken)
+            .response { request, response, (_, error) ->
+                log.finest { request.toString() }
+                log.finest { response.toString() }
+                queryError = error
+            }
+
+        request.join()
+
+        if (queryError != null)
+            throw RuntimeException(queryError!!.exception)
+    }
 }
