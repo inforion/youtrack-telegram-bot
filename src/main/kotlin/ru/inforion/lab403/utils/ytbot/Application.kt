@@ -151,6 +151,15 @@ class Application {
             log.info { "$appConfig" }
 
             val startingLastTimestamp = timestamp ?: appConfig.loadTimestamp()
+
+            log.info { "Checking ${appConfig.timestampFilePath} to writing..." }
+            appConfig
+                .runCatching { saveTimestamp(startingLastTimestamp) }
+                .onFailure {
+                    log.severe { "File ${appConfig.timestampFilePath} can't be written" }
+                    exitProcess(-1)
+                }
+
             log.info { "Starting last timestamp = $startingLastTimestamp dry = $dry" }
             if (daemon > 0) {
                 daemonize(startingLastTimestamp, daemon, dry, appConfig)
