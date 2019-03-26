@@ -2,10 +2,11 @@
 
 ## Description
 
-Telegram bot written in Kotlin language (JVM as backend) that when running connects to specified Youtrack server, query specified projects activity issues, parse it and post to specified telegram chat. Main features are:
+A Kotlin  (JVM back-end) based Telegram-bot when running connects to a specified YouTrack server, queries specified projects activity issues, parses them and posts to a specified telegram chat. Main features are:
+
 - Configurable projects and chats
 - Tags for users and fields
-- Links with Youtrack issues and activities
+- Links to Youtrack issues and activities
 - Mentions Telegram users using user ID (should be configured)
 - Telegram SOCKS5 SSL fully workable proxy
 - Telegram DNS custom resolver support (when DNS blocked)
