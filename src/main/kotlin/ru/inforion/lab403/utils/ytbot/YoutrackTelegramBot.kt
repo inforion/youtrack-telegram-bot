@@ -68,9 +68,9 @@ class YoutrackTelegramBot(
     private var project: Project? = null
     private var issue: Issue? = null
 
-    private fun getCommandTokens(string: String, limit: Int = 0) =
+    private fun getCommandTokens(string: String, limit: Int = 0, delimiter: Char = ' ') =
         string
-            .split(' ', limit = limit)
+            .split(delimiter, limit = limit)
             .map { it.trim() }
 
     private fun sendTextMessage(bot: TelegramProxy, chatId: Long, message: String) {
@@ -121,6 +121,32 @@ class YoutrackTelegramBot(
         return true
     }
 
+    private fun setProjectAndIssue(bot: TelegramProxy, chatId: Long, params: String): String? {
+        val others: String
+
+        val tokens = getCommandTokens(params, 2)
+
+        val isFirstTokenIssueID = maybeIssueID(tokens[0])
+
+        if (isFirstTokenIssueID) {
+            if (tokens.size < 2) {
+                sendTextMessage(bot, chatId, "Wrong format, use /comment [IssueID] comment")
+                return null
+            }
+            setIssueTo(bot, chatId, tokens[0])
+            others = tokens[1]
+        } else {
+            others = params
+        }
+
+        if (project == null || issue == null) {
+            sendTextMessage(bot, chatId, "Project or issue not set...")
+            return null
+        }
+
+        return others
+    }
+
     private fun maybeIssueID(string: String): Boolean {
         val tokens = string.split('-')
         return tokens.size == 2
@@ -165,7 +191,9 @@ class YoutrackTelegramBot(
             return
         }
 
-        val botCmd = input[0]
+        val cmdAndName = getCommandTokens(input[0], 2, '@')
+
+        val botCmd = cmdAndName[0]
         val params = input[1]
 
         when (botCmd) {
@@ -185,53 +213,28 @@ class YoutrackTelegramBot(
                 }
             }
 
-            "/command" -> getCommandTokens(params, 2).also { tokens ->
-                if (project == null) {
-                    sendTextMessage(bot, chatId, "Project not set, use project command")
-                    return
-                }
-
-                if (tokens.size < 2) {
-                    sendTextMessage(bot, chatId, "Wrong format, use /command command")
-                    return
-                }
-
-                val issueID = tokens[0]
-                val command = tokens[1]
-
-                if (!setIssueTo(bot, chatId, issueID))
-                    return
+            "/command" -> {
+                val command = setProjectAndIssue(bot, chatId, params)
 
                 youtrack
-                    .runCatching { command(issue!!.idReadable, command) }
+                    .runCatching { command(issue!!.idReadable, command = command) }
+                    .onSuccess {
+                        sendTextMessage(bot, chatId, "Command done: $command")
+                    }
                     .onFailure {
                         log.severe { "${it.stackTrace}" }
                         sendTextMessage(bot, chatId, "Exception during command: ${it.message}")
                     }
             }
 
-            "/comment" -> getCommandTokens(params, 2).also { tokens ->
-                val comment: String
-                val isFirstTokenIssueID = maybeIssueID(tokens[0])
-
-                if (isFirstTokenIssueID) {
-                    if (tokens.size < 2) {
-                        sendTextMessage(bot, chatId, "Wrong format, use /comment [IssueID] comment")
-                        return
-                    }
-                    setIssueTo(bot, chatId, tokens[0])
-                    comment = tokens[1]
-                } else {
-                    comment = params
-                }
-
-                if (project == null || issue == null) {
-                    sendTextMessage(bot, chatId, "Project or issue not set...")
-                    return
-                }
+            "/comment" -> {
+                val comment = setProjectAndIssue(bot, chatId, params)
 
                 youtrack
                     .runCatching { command(issue!!.idReadable, comment = comment) }
+                    .onSuccess {
+                        sendTextMessage(bot, chatId, "Comment added: $comment")
+                    }
                     .onFailure {
                         log.severe { "${it.stackTrace}" }
                         sendTextMessage(bot, chatId, "Exception during command: ${it.message}")
