@@ -65,13 +65,11 @@ class YoutrackTelegramBot(
         }
     }
 
-    private var project: Project? = null
-    private var issue: Issue? = null
+    private val projects = mutableMapOf<Int, Project>()
+    private val issues = mutableMapOf<Int, Issue>()
 
-    private fun getCommandTokens(string: String, limit: Int = 0, delimiter: Char = ' ') =
-        string
-            .split(delimiter, limit = limit)
-            .map { it.trim() }
+    private fun getCommandTokens(string: String?, limit: Int = 0, delimiter: Char = ' ') =
+        string?.split(delimiter, limit = limit)?.map { it.trim() } ?: emptyList()
 
     private fun sendTextMessage(bot: TelegramProxy, chatId: Long, message: String) {
         val msg = SendMessage(chatId, message)
@@ -79,67 +77,71 @@ class YoutrackTelegramBot(
         log.fine { response.toString() }
     }
 
-    private fun setProjectTo(bot: TelegramProxy, chatId: Long, name: String): Boolean {
-        val projects = youtrack
+    private fun setProjectTo(userId: Int, bot: TelegramProxy, chatId: Long, name: String): Boolean {
+        val requestedProjects = youtrack
             .projects(fields(Project::id, Project::name, Project::shortName))
             .filter { it.name == name || it.shortName == name }
 
-        if (projects.isEmpty()) {
+        if (requestedProjects.isEmpty()) {
             sendTextMessage(bot, chatId, "Project not found $name")
             return false
         }
 
-        sendTextMessage(bot, chatId, "Set project to ${projects[0].id} ${projects[0].name}")
-
-        project = projects[0]
+//        sendTextMessage(bot, chatId, "Set project to ${projects[0].id} ${projects[0].name}")
+        projects[userId] = requestedProjects[0]
 
         return true
     }
 
-    private fun setIssueTo(bot: TelegramProxy, chatId: Long, issueID: String): Boolean {
-        if (project == null) {
+    private fun setIssueTo(userId: Int, bot: TelegramProxy, chatId: Long, issueID: String): Boolean {
+        if (projects[userId] == null) {
             val shortName = issueID.takeWhile { it != '-' }
-            if (!setProjectTo(bot, chatId, shortName))
+            if (!setProjectTo(userId, bot, chatId, shortName))
                 return false
         }
 
-        val issues = youtrack.issues(
-            project!!,
+        val requestedIssues = youtrack.issues(
+            projects[userId]!!,
             fields(Issue::id, Issue::idReadable, Issue::summary),
             "issue id: $issueID"
         )
 
-        if (issues.isEmpty()) {
+        if (requestedIssues.isEmpty()) {
             sendTextMessage(bot, chatId, "Issue not found $issueID")
             return false
         }
 
-        sendTextMessage(bot, chatId, "Set issue to ${issues[0].id} ${issues[0].idReadable} ${issues[0].summary}")
+//        sendTextMessage(bot, chatId, "Set issue to ${issues[0].id} ${issues[0].idReadable} ${issues[0].summary}")
 
-        issue = issues[0]
+        issues[userId] = requestedIssues[0]
 
         return true
     }
 
-    private fun setProjectAndIssue(bot: TelegramProxy, chatId: Long, params: String): String? {
-        val others: String
+    private fun setProjectAndIssue(userId: Int, bot: TelegramProxy, chatId: Long, params: String?): String? {
+        val others: String?
 
         val tokens = getCommandTokens(params, 2)
+
+        if (tokens.isEmpty()) {
+            sendTextMessage(bot, chatId, "Wrong format, use /<cmd> [IssueID] <youtrack_cmd>")
+            return null
+        }
 
         val isFirstTokenIssueID = maybeIssueID(tokens[0])
 
         if (isFirstTokenIssueID) {
             if (tokens.size < 2) {
-                sendTextMessage(bot, chatId, "Wrong format, use /comment [IssueID] comment")
+                sendTextMessage(bot, chatId, "Wrong format, use /<cmd> [IssueID] <youtrack_cmd>")
                 return null
             }
-            setIssueTo(bot, chatId, tokens[0])
+            setIssueTo(userId, bot, chatId, tokens[0])
             others = tokens[1]
         } else {
             others = params
         }
 
-        if (project == null || issue == null) {
+        if (projects[userId] == null || issues[userId] == null) {
             sendTextMessage(bot, chatId, "Project or issue not set...")
             return null
         }
@@ -164,7 +166,7 @@ class YoutrackTelegramBot(
      * project - Set current project
      * issue - Set current issue
      */
-    private fun tryProcessMessage(bot: TelegramProxy, update: Update) {
+    private fun tryProcessMessage(defaultProject: String, bot: TelegramProxy, update: Update) {
         log.info { update.toString() }
         val message = update.message()
         if (message == null) {
@@ -184,40 +186,41 @@ class YoutrackTelegramBot(
         val firstname = user.firstName() ?: ""
         val lastname = user.lastName() ?: ""
         val fullname = "$firstname $lastname".trim()
+        val userId: Int = user.id()
 
         val input = getCommandTokens(text, 2)
-        if (input.size < 2) {
-            sendTextMessage(bot, chatId, "Wrong format, use <cmd> <parameters>")
-            return
-        }
-
         val cmdAndName = getCommandTokens(input[0], 2, '@')
-
         val botCmd = cmdAndName[0]
-        val params = input[1]
+
+        val params = input.getOrNull(1)
+
+        if (projects[userId] == null)
+            setProjectTo(userId, bot, chatId, defaultProject)
 
         when (botCmd) {
             "/project" -> getCommandTokens(params).also { tokens ->
                 when (tokens.size) {
-                    1 -> setProjectTo(bot, chatId, tokens[0])
+                    1 -> setProjectTo(userId, bot, chatId, tokens[0])
+                    0 -> sendTextMessage(bot, chatId, "Current default project ${projects[userId]?.name}")
                     else -> sendTextMessage(bot, chatId, "Wrong number of parameters, use /project project")
                 }
             }
 
             "/issue" -> getCommandTokens(params).also { tokens ->
                 when (tokens.size) {
-                    2 -> setProjectTo(bot, chatId, tokens[0])
-                            && setIssueTo(bot, chatId, tokens[1])
-                    1 -> setIssueTo(bot, chatId, tokens[0])
+                    2 -> setProjectTo(userId, bot, chatId, tokens[0])
+                            && setIssueTo(userId, bot, chatId, tokens[1])
+                    1 -> setIssueTo(userId, bot, chatId, tokens[0])
+                    0 -> sendTextMessage(bot, chatId, "Current default issue ${issues[userId]?.idReadable}")
                     else -> sendTextMessage(bot, chatId, "Wrong number of parameters, use /issue [project] issue")
                 }
             }
 
             "/command" -> {
-                val command = setProjectAndIssue(bot, chatId, params)
+                val command = setProjectAndIssue(userId, bot, chatId, params)
 
                 youtrack
-                    .runCatching { command(issue!!.idReadable, command = command) }
+                    .runCatching { command(issues[userId]!!.idReadable, command = command) }
                     .onSuccess {
                         sendTextMessage(bot, chatId, "Command done: $command")
                     }
@@ -228,10 +231,10 @@ class YoutrackTelegramBot(
             }
 
             "/comment" -> {
-                val comment = setProjectAndIssue(bot, chatId, params)
+                val comment = setProjectAndIssue(userId, bot, chatId, params)
 
                 youtrack
-                    .runCatching { command(issue!!.idReadable, comment = comment) }
+                    .runCatching { command(issues[userId]!!.idReadable, comment = comment) }
                     .onSuccess {
                         sendTextMessage(bot, chatId, "Comment added: $comment")
                     }
@@ -245,13 +248,12 @@ class YoutrackTelegramBot(
 
             "/whoami" -> {
                 val language = "speaks: ${user.languageCode()}"
-                val userId = "user ID: ${user.id()}"
                 val username = "username: ${user.username()}"
                 val isBot = "and you are " + if (user.isBot) "bot" else "not a bot"
-                sendTextMessage(bot, chatId, "You are $fullname $username $userId $language $isBot")
+                sendTextMessage(bot, chatId, "You are $fullname $username user ID: $userId $language $isBot")
             }
 
-            else -> sendTextMessage(bot, chatId, responses.choice())
+            else -> sendTextMessage(bot, chatId, "You send me command $botCmd ... ${responses.choice()}")
         }
     }
 
@@ -261,19 +263,23 @@ class YoutrackTelegramBot(
     }
 
     fun createCommandServices() {
-        appConfig.projects.forEach { projectConfig ->
-            val bot = createOrGetTelegramProxy(projectConfig)
-            val listener = UpdatesListener { updates ->
-                updates.forEach { update ->
-                    update
-                        .runCatching { tryProcessMessage(bot, update) }
-                        .onFailure { error -> failProcessMessage(update, error) }
-                }
+        // for only unique project names avoid to create duplicates
+        appConfig
+            .projects
+            .associateBy { it.name }
+            .forEach { (name, config) ->
+                val bot = createOrGetTelegramProxy(config)
+                val listener = UpdatesListener { updates ->
+                    updates.forEach { update ->
+                        update
+                            .runCatching { tryProcessMessage(name, bot, update) }
+                            .onFailure { error -> failProcessMessage(update, error) }
+                    }
 
-                log.warning { "Confirm all" }
-                UpdatesListener.CONFIRMED_UPDATES_ALL
+                    log.warning { "Confirm all" }
+                    UpdatesListener.CONFIRMED_UPDATES_ALL
+                }
+                bot.setUpdatesListener(listener)
             }
-            bot.setUpdatesListener(listener)
-        }
     }
 }

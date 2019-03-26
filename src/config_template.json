@@ -1,9 +1,4 @@
 {
-  "telegram": {  // optional (for telegram check)
-    "token": "341342:xxxxxxxxxxx",
-    "chatId": -1,
-    "dry": true,  // don't send messages to Telegram just query Youtrack and parse
-  },
   "projects": [
     {
       "name": "Kopycat",  // full Youtrack name (for in: filter)
