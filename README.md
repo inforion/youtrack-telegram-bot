@@ -2,56 +2,60 @@
 
 ## Description
 
-A Kotlin  (JVM back-end) based Telegram-bot when running connects to a specified YouTrack server, queries specified projects activity issues, parses them and posts to a specified telegram chat. Main features are:
+[Telegram](https://telegram.org/) Bot for JetBrains YouTrack server (tested with Youtrack 2019.1). Written in Kotlin, JVM for back-end. Youtrack-bot connects to a specified YouTrack server, queries specified project activity issues, parses and posts them to a specified telegram chat. 
 
-- Configurable projects and chats
-- Tags for users and fields
-- Links to Youtrack issues and activities
-- Mentions Telegram users using user ID (should be configured)
-- Telegram SOCKS5 SSL fully workable proxy
-- Telegram DNS custom resolver support (when DNS blocked)
-- Tested with Youtrack 2019.1
+Features:
+- configurable projects and chats
+- tags for users and fields
+- links to Youtrack issues and activities
+- mention Telegram users using their user ID (should be configured)
+- telegram SOCKS5 SSL proxy-server support
+- telegram DNS custom resolver support
 
 ## Installation
 
-Install Oracle JVM version 1.8 or above.
-
-Download and unpack tar file into any directory with permission access and make temp directory:
+Install Oracle JVM version 1.8 or above.  
+Download and extract .tar file to any directory with permission access and create `temp` directory:
 
 ```
 tar -xvf youtrack-telegram-bot-x.y.z.tar -C <youtrack-telegram-bot>
 cd <youtrack-telegram-bot>
 mkdir temp
 ```
-
-where 
- - x.y.z - version of package
- - youtrack-telegram-bot - application directory
+ - *x.y.z* - version of package
+ - *youtrack-telegram-bot* - application directory
  
-Download config_template.json, rename it to config.json and place it into temp directory. Edit config.json according your settings.
+Download [config_template.json](https://github.com/inforion/youtrack-telegram-bot/blob/master/src/config_template.json), rename it to `config.json` and move it to <youtrack-telegram-bot>/temp folder. Edit `config.json` according to your settings.
 
 ## Running
 
-1. Perform check Youtrack connection and setting using command:
+Check bot settings:
+
 ```
 <youtrack-telegram-bot>/bin/youtrack-telegram-bot -c <path-to-config.json> -ytc Kopycat
 ```
-You should see in console all project from Youtrack and all issues from specified project (in this case project name Kopycat)
 
-2. Perform check Telegram connection and setting using command:
-```
-<youtrack-telegram-bot>/bin/youtrack-telegram-bot -c <path-to-config.json> -tgc "Kopycat:m:sending test message to assosite chat"
-```
-You should see in Telegram chat assosiated in config.json with project Kopycat message "sending test message to assosite chat"
+You should see all projects from Youtrack and all issues from specified project listed in console (in this case project's name is Kopycat)
 
-3. Perform dry run parsing Youtrack issues using command (bot will analyze project and parse all activities, print it to console, but won't send to Telegram).
-This is required to determine timestamp of last update. If you don't perform dry run then all activities will be post to Telegram.
+Than check Telegram connection:
+
+```
+<youtrack-telegram-bot>/bin/youtrack-telegram-bot -c <path-to-config.json> -tgc "Kopycat:m:sending test message to associated chat"
+```
+
+You should see the message `sending test message to associated chat` in the project Telegram chat (which is assosiated with project Kopycat in config.json). 
+
+You can perform dry run to parse Youtrack issues. Youtrack-telegram-bot will analyze project and parse all activities, print it to console, but won't actually send anything to Telegram.
+**This is required to determine timestamp of the last update**. If you don't perform dry run then all activities will be posted to Telegram.
+
 ```
 <youtrack-telegram-bot>/bin/youtrack-telegram-bot -c <path-to-config.json> -r
 ```
 
-4. Run youtrack-telegram-bot in daemon mode using command:
+Run youtrack-telegram-bot as daemon:
+
 ```
 <youtrack-telegram-bot>/bin/youtrack-telegram-bot -c <path-to-config.json> -d 1
 ```
-This will start youtrack-telegram-bot in daemon mode with update interval 1 second.
+
+This will start youtrack-telegram-bot in daemon mode with 1 second update interval.
