@@ -26,7 +26,7 @@ class YoutrackTelegramBot(
     private val bots = mutableMapOf<String, TelegramProxy>()
 
     private fun createOrGetTelegramProxy(config: ProjectConfig) =
-        bots.getOrPut(config.name) { TelegramProxy(config.token, appConfig.proxy) }
+        bots.getOrPut(config.token) { TelegramProxy(config.token, appConfig.proxy) }
 
     private val youtrack by lazy { Youtrack(appConfig.youtrack.baseUrl, appConfig.youtrack.token) }
 
@@ -221,9 +221,6 @@ class YoutrackTelegramBot(
 
                 youtrack
                     .runCatching { command(issues[userId]!!.idReadable, command = command) }
-                    .onSuccess {
-                        sendTextMessage(bot, chatId, "Command done: $command")
-                    }
                     .onFailure {
                         log.severe { "${it.stackTrace}" }
                         sendTextMessage(bot, chatId, "Exception during command: ${it.message}")
@@ -235,9 +232,6 @@ class YoutrackTelegramBot(
 
                 youtrack
                     .runCatching { command(issues[userId]!!.idReadable, comment = comment) }
-                    .onSuccess {
-                        sendTextMessage(bot, chatId, "Comment added: $comment")
-                    }
                     .onFailure {
                         log.severe { "${it.stackTrace}" }
                         sendTextMessage(bot, chatId, "Exception during command: ${it.message}")
@@ -264,15 +258,12 @@ class YoutrackTelegramBot(
 
     fun createCommandServices() {
         // for only unique project names avoid to create duplicates
-        appConfig
-            .projects
-            .associateBy { it.name }
-            .forEach { (name, config) ->
+        appConfig.projects.forEach { config ->
                 val bot = createOrGetTelegramProxy(config)
                 val listener = UpdatesListener { updates ->
                     updates.forEach { update ->
                         update
-                            .runCatching { tryProcessMessage(name, bot, update) }
+                            .runCatching { tryProcessMessage(config.name, bot, update) }
                             .onFailure { error -> failProcessMessage(update, error) }
                     }
 
