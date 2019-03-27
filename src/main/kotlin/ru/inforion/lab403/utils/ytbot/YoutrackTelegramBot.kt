@@ -94,8 +94,9 @@ class YoutrackTelegramBot(
     }
 
     private fun setIssueTo(userId: Int, bot: TelegramProxy, chatId: Long, issueID: String): Boolean {
-        if (projects[userId] == null) {
-            val shortName = issueID.takeWhile { it != '-' }
+        val shortName = issueID.takeWhile { it != '-' }
+        val project = projects[userId]
+        if (project == null || project.shortName != shortName) {
             if (!setProjectTo(userId, bot, chatId, shortName))
                 return false
         }
