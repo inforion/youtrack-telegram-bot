@@ -253,8 +253,7 @@ class YoutrackTelegramBot(
     }
 
     private fun failProcessMessage(update: Update?, error: Throwable) {
-        log.severe { "Error occurred when parsing $update: ${error.message}\n" }
-        error.printStackTrace()
+        log.severe { "Error occurred when parsing $update: ${error.message}\n${error.stackTraceAsString}" }
     }
 
     fun createCommandServices() {

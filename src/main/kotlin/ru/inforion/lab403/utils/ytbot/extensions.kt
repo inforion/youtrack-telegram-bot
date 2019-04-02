@@ -2,6 +2,8 @@ package ru.inforion.lab403.utils.ytbot
 
 import ru.inforion.lab403.common.extensions.asInt
 import ru.inforion.lab403.common.extensions.get
+import java.io.PrintWriter
+import java.io.StringWriter
 import java.util.*
 import kotlin.reflect.KProperty
 
@@ -87,3 +89,10 @@ fun String.removeChars(chars: String, ignoreCase: Boolean = false)
 inline val Int.asIPAddress get() = "${this[31..24]}.${this[23..16]}.${this[15..8]}.${this[7..0]}"
 
 inline val Long.asIPAddress get() = asInt.asIPAddress
+
+val Throwable.stackTraceAsString get(): String {
+    val sw = StringWriter()
+    val pw = PrintWriter(sw)
+    printStackTrace(pw)
+    return sw.toString()
+}
