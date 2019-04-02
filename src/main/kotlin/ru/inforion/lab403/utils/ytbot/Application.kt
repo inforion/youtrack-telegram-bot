@@ -19,8 +19,8 @@ class Application {
         private fun daemonize(
             bot: YoutrackTelegramBot,
             daemon: Int,
-            dontSendMessages: Boolean,
-            dontStartServices: Boolean
+            tgSendMessages: Boolean,
+            tgStartServices: Boolean
         ) {
             log.info { "Starting daemon... press enter to stop daemon" }
 
@@ -28,13 +28,13 @@ class Application {
             var working = true
             var currentLastTimestamp = bot.startLastTimestamp
 
-            if (dontStartServices)
+            if (tgStartServices)
                 bot.createCommandServices()
 
             val worker = thread {
                 synchronized(lock) {
                     while (working) {
-                        bot.execute(dontSendMessages, currentLastTimestamp)
+                        bot.execute(tgSendMessages, currentLastTimestamp)
                         currentLastTimestamp = bot.loadCurrentLastTimestamp()
                         lock.wait(daemon * 1000L)
                     }
@@ -81,7 +81,7 @@ class Application {
             val configPath: String = options["config"]
             val timestamp: Long? = options["timestamp"]
             val tgSendMessages: Boolean = !(options["dont_send_messages"] ?: false)
-            val tgStartServices: Boolean = !(options["dont_start_service"] ?: false)
+            val tgStartServices: Boolean = !(options["dont_start_services"] ?: false)
             val daemon: Int = options["daemon"] ?: -1
             val checkTelegram: String? = options["check_telegram"]
             val checkYoutrack: String? = options["check_youtrack"]
