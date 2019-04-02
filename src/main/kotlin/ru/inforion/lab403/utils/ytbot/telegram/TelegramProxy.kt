@@ -15,7 +15,7 @@ import javax.net.ssl.SSLSession
 
 
 
-class TelegramProxy(token: String, proxy: ProxyConfig? = null) {
+class TelegramProxy(val token: String, proxy: ProxyConfig? = null) {
     companion object {
         private val log = logger()
 

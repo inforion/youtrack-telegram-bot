@@ -4,6 +4,7 @@ import com.github.kittinunf.fuel.core.FuelError
 import com.github.kittinunf.fuel.core.extensions.authentication
 import com.github.kittinunf.fuel.httpGet
 import com.github.kittinunf.fuel.httpPost
+import com.github.kittinunf.fuel.httpPut
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import ru.inforion.lab403.common.logging.logger
@@ -12,11 +13,12 @@ import ru.inforion.lab403.utils.ytbot.removeChars
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.ActivitiesPage
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Issue
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Project
+import java.text.SimpleDateFormat
 import java.util.logging.Level
 
 class Youtrack(val baseUrl: String, private val permToken: String) {
     companion object {
-        val log = logger(Level.INFO)
+        val log = logger(Level.FINEST)
 
         /**
          * Function to short call for generate object type token for Gson library
@@ -38,6 +40,10 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
          * @return markdown URL
          */
         private fun markdownUrl(url: String, inlineString: String = ARROW_CHAR): String = "\\[[$inlineString]($url)]"
+
+        private val timedateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss")
+
+        fun makeTimedate(timestamp: Long) = timedateFormat.format(timestamp)
     }
 
     /**
@@ -273,17 +279,6 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
             = querySingle<Project>(token(), "admin/projects/$projectID", fields)
 
     /**
-     * Request from Youtrack issue with [issueID] and specified [fields]
-     *
-     * NOTE: Functions fields and with in extensions.kt may be used to create [fields] string
-     *
-     * @param issueID issue ID to request
-     * @param fields requested fields in Youtrack REST format
-     */
-    fun issue(issueID: String, fields: String)
-            = querySingle<Issue>(token(), "issues/$issueID", fields)
-
-    /**
      * Request Youtrack to execute command for issue with [issueID]
      *
      * WARNING: Using old REST API currently!
@@ -320,6 +315,46 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
 
         val request = "$baseUrl$url"
             .httpPost(parameters)
+            .authentication()
+            .bearer(permToken)
+            .response { request, response, (_, error) ->
+                log.finest { request.toString() }
+                log.finest { response.toString() }
+                queryError = error
+            }
+
+        request.join()
+
+        if (queryError != null)
+            throw RuntimeException(queryError!!.exception)
+    }
+
+    /**
+     * Request Youtrack to create a new issue for [projectID] and with [summary] and [description]
+     *
+     * @param projectID project ID where issue to create
+     * @param summary new issue summary
+     * @param description new issue description
+     */
+    fun issue(
+        projectID: String,
+        summary: String,
+        description: String? = null
+    ) {
+        val url = "/rest/issue"
+
+        val parameters = mutableListOf<Pair<String, String>>()
+
+        parameters.add("project" to projectID)
+        parameters.add("summary" to summary)
+
+        if (description != null)
+            parameters.add("description" to description)
+
+        var queryError: FuelError? = null
+
+        val request = "$baseUrl$url"
+            .httpPut(parameters)
             .authentication()
             .bearer(permToken)
             .response { request, response, (_, error) ->

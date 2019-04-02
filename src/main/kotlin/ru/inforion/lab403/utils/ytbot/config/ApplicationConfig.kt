@@ -29,6 +29,9 @@ data class ApplicationConfig(
         fun load(path: String): ApplicationConfig = jsonConfigLoader.readValue(File(path))
     }
 
+    fun isCategoryActive(categoryId: CategoryId) =
+        if (activityCategories == null) true else categoryId in activityCategories
+
     fun saveTimestamp(timestamp: Long) {
         File(timestampFilePath).writeText(timestamp.toString())
     }

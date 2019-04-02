@@ -7,6 +7,7 @@ import ru.inforion.lab403.common.extensions.flag
 import ru.inforion.lab403.common.extensions.variable
 import ru.inforion.lab403.common.logging.logger
 import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
+import ru.inforion.lab403.utils.ytbot.youtrack.Youtrack
 import java.util.logging.Level
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
@@ -130,7 +131,10 @@ class Application {
 
             val bot = YoutrackTelegramBot(startingLastTimestamp, appConfig)
 
-            log.info { "Starting last timestamp=$startingLastTimestamp send=$tgSendMessages services=$tgStartServices" }
+            log.info {
+                val datetime = Youtrack.makeTimedate(startingLastTimestamp)
+                "Starting last timestamp=$startingLastTimestamp [$datetime] send=$tgSendMessages services=$tgStartServices"
+            }
             if (daemon > 0) {
                 daemonize(bot, daemon, tgSendMessages, tgStartServices)
             } else {

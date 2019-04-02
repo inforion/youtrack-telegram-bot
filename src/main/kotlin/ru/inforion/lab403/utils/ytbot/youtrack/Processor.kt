@@ -157,6 +157,13 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         else -> this::processUnknownActivity
     }
 
+    private fun updateTimestamp(activityTimestamp: Long) {
+        if (appConfig.loadTimestamp() < activityTimestamp) {
+            log.info { "Updating timestamp = $activityTimestamp" }
+            appConfig.saveTimestamp(activityTimestamp)
+        }
+    }
+
     private fun processActivitiesByCategory(
         issue: Issue,
         date: Date,
@@ -164,7 +171,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         author: User,
         category: Category,
         activities: Collection<Activity>,
-        block: (String, Long) -> Unit
+        block: (String) -> Unit
     ) {
         val processor = getProcessorBy(category)
 
@@ -205,11 +212,17 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
             }.max() ?: 0
         }
 
-        block(result, timestamp)
+        if (appConfig.isCategoryActive(category.id))
+            block(result)
+
+        updateTimestamp(timestamp)
     }
 
-    private fun processIssue(issue: Issue, project: Project, block: (String, Long) -> Unit) {
-        log.info { "Processing issue: ${issue.id} ${issue.updated} ${issue.idReadable} ${issue.summary}" }
+    private fun processIssue(issue: Issue, project: Project, block: (String) -> Unit) {
+        log.info {
+            val datetime = Youtrack.makeTimedate(issue.updated)
+            "Request issue activities: ${issue.id} ${issue.updated} [$datetime] $ ${issue.idReadable}"
+        }
 
         val activitiesPage = youtrack.activitiesPage(
             issue,
@@ -264,16 +277,20 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
                     )
                 )
             ),
-            appConfig.activityCategories ?: enumValuesCollection()
+            enumValuesCollection()  // filtered in lambda due to timestamp update required
         )
 
-        val allIssueActivities = activitiesPage.activities
+        val allIssueActivities = activitiesPage.activities.filter { it.timestamp > lastUpdateTimestamp }
+
+        log.info {
+            val datetime = Youtrack.makeTimedate(issue.updated)
+            "Processing issue activities: ${issue.id} ${issue.updated} [$datetime] ${issue.idReadable} count=${allIssueActivities.size}"
+        }
 
         val minutesGroupInterval = appConfig.minutesGroupInterval
         val timeGroupInterval = 60000 * minutesGroupInterval
 
         allIssueActivities
-            .filter { it.timestamp > lastUpdateTimestamp }
             .groupSeriesBy { it.author }
             .forEach { (author, authorActivities) ->
                 authorActivities
@@ -296,8 +313,10 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
             }
     }
 
-    fun processProject(project: Project, block: (String, Long) -> Unit) {
-        log.finer { "Processing project: ${project.id} ${project.name} ${project.shortName}" }
+    fun processProject(project: Project, block: (String) -> Unit) {
+        val start = Youtrack.makeTimedate(lastUpdateTimestamp)
+
+        log.finer { "Processing project: ${project.id} ${project.name} ${project.shortName} from $start" }
 
         val issues = youtrack.issues(
             project,
@@ -308,7 +327,8 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
                 Issue::summary,
                 Issue::description,
                 Issue::fields.with("name", "value(name,login,ringId)")
-            )
+            ),
+            query = "updated: $start .. *"  // star is open range
         )
 
         val filteredIssues = if (appConfig.filterIssues == null) issues else {
@@ -317,7 +337,11 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         }
 
         filteredIssues
-            .filter { it.updated > lastUpdateTimestamp }
+            .filter { it.updated > lastUpdateTimestamp }  // may already be processed due to milliseconds
             .forEach { processIssue(it, project, block) }
+    }
+
+    init {
+        assert(lastUpdateTimestamp >= 0)
     }
 }

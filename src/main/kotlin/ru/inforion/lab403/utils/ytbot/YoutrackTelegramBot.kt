@@ -13,6 +13,7 @@ import ru.inforion.lab403.utils.ytbot.youtrack.Processor
 import ru.inforion.lab403.utils.ytbot.youtrack.Youtrack
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Issue
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Project
+import java.io.DataInputStream
 import java.util.logging.Level
 
 class YoutrackTelegramBot(
@@ -27,6 +28,9 @@ class YoutrackTelegramBot(
 
     private fun createOrGetTelegramProxy(config: ProjectConfig) =
         bots.getOrPut(config.token) { TelegramProxy(config.token, appConfig.proxy) }
+
+    private fun createIfAbsentTelegramProxy(config: ProjectConfig) =
+        bots.putIfAbsent(config.token) { TelegramProxy(config.token, appConfig.proxy) }
 
     private val youtrack by lazy { Youtrack(appConfig.youtrack.baseUrl, appConfig.youtrack.token) }
 
@@ -48,17 +52,13 @@ class YoutrackTelegramBot(
         appConfig.projects.map { projectConfig ->
             val bot = createOrGetTelegramProxy(projectConfig)
             val project = projects.first { it.name == projectConfig.name }
-            processor.processProject(project) { data, activityTimestamp ->
+            processor.processProject(project) { data ->
                 if (tgSendMessages) {
                     val message = SendMessage(projectConfig.chatId, data)
                         .parseMode(ParseMode.Markdown)
                     log.finest { "Sending chatId = ${projectConfig.chatId} message $message" }
                     val response = bot.execute(message)
                     log.finest { response.toString() }
-                }
-                if (appConfig.loadTimestamp() < activityTimestamp) {
-                    log.info { "Updating timestamp = $activityTimestamp" }
-                    appConfig.saveTimestamp(activityTimestamp)
                 }
                 log.fine(data)
             }
@@ -150,6 +150,36 @@ class YoutrackTelegramBot(
         return others
     }
 
+    private fun safeYoutrackCommand(
+        bot: TelegramProxy,
+        chatId: Long,
+        userId: Int,
+        command: String? = null,
+        comment: String? = null
+    ) {
+        youtrack
+            .runCatching { command(issues[userId]!!.idReadable, command, comment) }
+            .onFailure {
+                log.severe { it.stackTraceAsString }
+                sendTextMessage(bot, chatId, "Can't execute command: ${it.message}")
+            }
+    }
+
+    private fun safeYoutrackCreateIssue(
+        bot: TelegramProxy,
+        chatId: Long,
+        userId: Int,
+        summary: String,
+        description: String?
+    ) {
+        youtrack
+            .runCatching { issue(projects[userId]!!.shortName, summary, description) }
+            .onFailure {
+                log.severe { it.stackTraceAsString }
+                sendTextMessage(bot, chatId, "Can't create issue: ${it.message}")
+            }
+    }
+
     private fun maybeIssueID(string: String): Boolean {
         val tokens = string.split('-')
         return tokens.size == 2
@@ -167,7 +197,7 @@ class YoutrackTelegramBot(
      * project - Set current project
      * issue - Set current issue
      */
-    private fun tryProcessMessage(defaultProject: String, bot: TelegramProxy, update: Update) {
+    private fun tryProcessMessage(bot: TelegramProxy, update: Update) {
         log.info { update.toString() }
         val message = update.message()
         if (message == null) {
@@ -195,9 +225,6 @@ class YoutrackTelegramBot(
 
         val params = input.getOrNull(1)
 
-        if (projects[userId] == null)
-            setProjectTo(userId, bot, chatId, defaultProject)
-
         when (botCmd) {
             "/project" -> getCommandTokens(params).also { tokens ->
                 when (tokens.size) {
@@ -217,26 +244,51 @@ class YoutrackTelegramBot(
                 }
             }
 
-            "/command" -> {
-                val command = setProjectAndIssue(userId, bot, chatId, params)
+            "/state" -> {
+                val state = setProjectAndIssue(userId, bot, chatId, params)
+                if (state != null)
+                    safeYoutrackCommand(bot, chatId, userId, command = "State: $state")
+            }
 
-                youtrack
-                    .runCatching { command(issues[userId]!!.idReadable, command = command) }
-                    .onFailure {
-                        log.severe { "${it.stackTrace}" }
-                        sendTextMessage(bot, chatId, "Exception during command: ${it.message}")
-                    }
+            "/create" -> {
+                if (params == null) {
+                    sendTextMessage(bot, chatId, "Wrong number of parameters, use /create <project> [<summary>] [<description>]")
+                    return
+                }
+
+                // TODO: REWRITE THIS WITH STRING STREAM!!!
+
+                val project = params.takeWhile { it != ' ' }
+
+                if (!setProjectTo(userId, bot, chatId, project))
+                    return
+
+                var remains = params.removePrefix(project)
+                val summaryToken = remains.takeWhile { it != ']' }
+
+                if (summaryToken.isBlank()) {
+                    sendTextMessage(bot, chatId, "Wrong number of parameters, use /create <project> [<summary>] [<description>]")
+                    return
+                }
+
+                val summary = summaryToken.dropWhile { it != '[' }.drop(1)
+
+                remains = remains.removePrefix(summaryToken).drop(1)
+
+                val descriptionToken = remains.takeWhile { it != ']' }
+                val description = if (descriptionToken.isNotBlank()) descriptionToken.dropWhile { it != '[' }.drop(1) else null
+
+                safeYoutrackCreateIssue(bot, chatId, userId, summary, description)
+            }
+
+            "/command" -> {
+                sendTextMessage(bot, chatId, "Due to security issues arbitrary command now disabled...")
             }
 
             "/comment" -> {
                 val comment = setProjectAndIssue(userId, bot, chatId, params)
-
-                youtrack
-                    .runCatching { command(issues[userId]!!.idReadable, comment = comment) }
-                    .onFailure {
-                        log.severe { "${it.stackTrace}" }
-                        sendTextMessage(bot, chatId, "Exception during command: ${it.message}")
-                    }
+                if (comment != null)
+                    safeYoutrackCommand(bot, chatId, userId, comment = comment)
             }
 
             "/hello" -> sendTextMessage(bot, chatId, "Hello $fullname!")
@@ -253,24 +305,27 @@ class YoutrackTelegramBot(
     }
 
     private fun failProcessMessage(update: Update?, error: Throwable) {
-        log.severe { "Error occurred when parsing $update: ${error.message}\n${error.stackTraceAsString}" }
+        val trace = error.stackTraceAsString
+        log.severe { "Error occurred when parsing $update: ${error.message}\n$trace" }
     }
 
     fun createCommandServices() {
         // for only unique project names avoid to create duplicates
-        appConfig.projects.forEach { config ->
-                val bot = createOrGetTelegramProxy(config)
-                val listener = UpdatesListener { updates ->
-                    updates.forEach { update ->
-                        update
-                            .runCatching { tryProcessMessage(config.name, bot, update) }
-                            .onFailure { error -> failProcessMessage(update, error) }
-                    }
-
-                    log.warning { "Confirm all" }
-                    UpdatesListener.CONFIRMED_UPDATES_ALL
+        appConfig
+            .projects
+            .mapNotNull { createIfAbsentTelegramProxy(it) }
+            .forEach { bot ->
+            log.info { "Starting listener for bot = ${bot.token}" }
+            val listener = UpdatesListener { updates ->
+                updates.forEach { update ->
+                    update
+                        .runCatching { tryProcessMessage(bot, update) }
+                        .onFailure { error -> failProcessMessage(update, error) }
                 }
-                bot.setUpdatesListener(listener)
+                log.finest { "Confirm all" }
+                UpdatesListener.CONFIRMED_UPDATES_ALL
             }
+            bot.setUpdatesListener(listener)
+        }
     }
 }
