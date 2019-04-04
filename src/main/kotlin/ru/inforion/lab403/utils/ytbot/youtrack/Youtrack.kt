@@ -18,7 +18,7 @@ import java.util.logging.Level
 
 class Youtrack(val baseUrl: String, private val permToken: String) {
     companion object {
-        val log = logger(Level.FINEST)
+        val log = logger(Level.INFO)
 
         /**
          * Function to short call for generate object type token for Gson library
