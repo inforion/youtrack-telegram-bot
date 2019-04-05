@@ -37,7 +37,10 @@ class YoutrackTelegramBot(
     fun loadCurrentLastTimestamp() = appConfig.loadTimestamp()
 
     fun execute(tgSendMessages: Boolean, lastTimestamp: Long = startLastTimestamp) {
-        log.finer { "Parsing Youtrack activity timestamp=$lastTimestamp" }
+        log.finer {
+            val date = Youtrack.makeTimedate(lastTimestamp)
+            "Parsing Youtrack activity timestamp=$lastTimestamp [$date]"
+        }
         val projects = youtrack.projects(
             fields(
                 Project::id,
@@ -46,7 +49,6 @@ class YoutrackTelegramBot(
             )
         )
 
-        log.finest { "Create Youtrack processor..." }
         val processor = Processor(youtrack, lastTimestamp, appConfig)
 
         appConfig.projects.map { projectConfig ->
@@ -58,7 +60,9 @@ class YoutrackTelegramBot(
                         .parseMode(ParseMode.Markdown)
                     log.finest { "Sending chatId = ${projectConfig.chatId} message $message" }
                     val response = bot.execute(message)
-                    log.finest { response.toString() }
+                    if (response.message() == null) {
+                        log.severe { "Failed to send message to Telegram: $data " }
+                    }
                 }
                 log.fine(data)
             }

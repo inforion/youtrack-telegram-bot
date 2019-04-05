@@ -14,6 +14,7 @@ import ru.inforion.lab403.utils.ytbot.youtrack.scheme.ActivitiesPage
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Issue
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Project
 import java.text.SimpleDateFormat
+import java.util.*
 import java.util.logging.Level
 
 class Youtrack(val baseUrl: String, private val permToken: String) {
@@ -41,7 +42,9 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
          */
         private fun markdownUrl(url: String, inlineString: String = ARROW_CHAR): String = "\\[[$inlineString]($url)]"
 
-        private val timedateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss")
+        private val timedateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss").apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
 
         fun makeTimedate(timestamp: Long) = timedateFormat.format(timestamp)
     }
