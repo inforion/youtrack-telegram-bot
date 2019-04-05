@@ -19,6 +19,10 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
 
         private fun crop(string: String, size: Int) =
             if (string.length <= size) string else "${string.stretch(size)}..."
+
+        private fun escapeMarkdown(string: String) = string
+            .replace("_", "\\_")
+            .replace("*", "\\*")
     }
 
     private fun processAddedRemoved(activity: Activity, block: (ArrayList<LinkedTreeMap<String, String>>) -> String): String {
@@ -53,15 +57,15 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
             }
             // Add hash tag to specific fields
             in appConfig.taggedCustomFields -> {
-                "#${data.removeChars(' ', '-', '.')}"
+                "#${escapeMarkdown(data).removeChars(' ', '-', '.')}"
             }
-            else -> data
+            else -> escapeMarkdown(data)
         }
         return "$presentation: $second"
     }
 
     private fun processInternalDescription(description: String?) =
-        if (description != null) crop(description, appConfig.descriptionMaxChars) else emptyString
+        if (description != null) escapeMarkdown(crop(description, appConfig.descriptionMaxChars)) else emptyString
 
     private fun processIssueCreatedActivity(project: Project, issue: Issue, activity: Activity): String {
         val stringFields = issue.fields
@@ -69,7 +73,8 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
             .joinToString("\n ") { processInternalCustomField(it.name, it.value) }
         val vDesc = processInternalDescription(issue.description)
         val vvDesc = if (vDesc.isNotBlank()) "\n$vDesc" else ""
-        return "${issue.summary}$vvDesc\n $stringFields"
+        val summary = escapeMarkdown(issue.summary)
+        return "$summary$vvDesc\n $stringFields"
     }
 
     private fun processLinkActivity(project: Project, issue: Issue, activity: Activity) =
@@ -159,7 +164,10 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
 
     private fun updateTimestamp(activityTimestamp: Long) {
         if (appConfig.loadTimestamp() < activityTimestamp) {
-            log.info { "Updating timestamp = $activityTimestamp" }
+            log.info {
+                val date = Youtrack.makeTimedate(activityTimestamp)
+                "Updating timestamp = $activityTimestamp [$date]"
+            }
             appConfig.saveTimestamp(activityTimestamp)
         }
     }
@@ -187,7 +195,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
             val tagId = youtrack.tagId(issue.idReadable)
             val tagAuthor = youtrack.tagUsername(author.login, author.ringId, appConfig.users)
             val tagCategory = youtrack.tagCategory(category.id)
-            val summary = crop(issue.summary, appConfig.descriptionMaxChars)
+            val summary = escapeMarkdown(crop(issue.summary, appConfig.descriptionMaxChars))
 
             append("$dateString $tagId $summary $tagCategory")
             append("\n- Author: $tagAuthor")
@@ -291,6 +299,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         val timeGroupInterval = 60000 * minutesGroupInterval
 
         allIssueActivities
+            .filter { it.timestamp > lastUpdateTimestamp }
             .groupSeriesBy { it.author }
             .forEach { (author, authorActivities) ->
                 authorActivities
