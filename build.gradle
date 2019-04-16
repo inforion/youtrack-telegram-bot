@@ -6,7 +6,7 @@ plugins {
 applicationName = "youtrack-telegram-bot"
 archivesBaseName = "youtrack-telegram-bot"
 group = 'ru.inforion.lab403.utils'
-version = '0.1.1'
+version = '0.1.2'
 mainClassName = "ru.inforion.lab403.utils.ytbot.Application"
 description = "Youtrack Telegram bot"
 
