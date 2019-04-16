@@ -46,7 +46,14 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
     }
 
     private fun processInternalCustomField(presentation: String, value: Any?): String {
-        val fields = value as? LinkedTreeMap<String, String> ?: return "$presentation: -"
+        val fields = try {
+            value as LinkedTreeMap<String, String>
+        } catch (error: ClassCastException) {
+            if (value != null)
+                log.severe { "$presentation: can't process $value" }
+
+            return "$presentation: -"
+        }
 
         val data = fields["name"]!!
         val second = when (presentation) {
