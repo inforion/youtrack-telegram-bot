@@ -59,3 +59,15 @@ Run youtrack-telegram-bot as daemon:
 ```
 
 This will start youtrack-telegram-bot in daemon mode with 1 second update interval.
+
+## Docker
+
+Build container:
+```
+docker build -t youtrack-telegram-bot .
+```
+
+Run with mount prapared config to `/opt/youtrack-telegram-bot/temp/config.json`:
+```
+docker run -it --name youtrk-telega-bot -v ./my-config.json:/opt/youtrack-telegram-bot/temp/config.json youtrack-telegram-bot
+```
