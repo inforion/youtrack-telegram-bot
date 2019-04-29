@@ -9,4 +9,4 @@ RUN wget -qO- https://github.com/inforion/youtrack-telegram-bot/releases/downloa
 
 COPY ./src/config_template.json ./temp/config.json
 
-CMD ["bin/youtrack-telegram-bot", "-c", "temp/config.json"]
+CMD ["bin/youtrack-telegram-bot", "-c", "temp/config.json", "-d", "1"]
