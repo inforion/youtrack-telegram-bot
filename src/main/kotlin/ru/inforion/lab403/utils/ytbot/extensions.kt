@@ -1,6 +1,5 @@
 package ru.inforion.lab403.utils.ytbot
 
-import com.google.common.base.Throwables
 import ru.inforion.lab403.common.extensions.asInt
 import ru.inforion.lab403.common.extensions.get
 import java.io.PrintWriter
@@ -91,7 +90,7 @@ inline val Int.asIPAddress get() = "${this[31..24]}.${this[23..16]}.${this[15..8
 
 inline val Long.asIPAddress get() = asInt.asIPAddress
 
-val Throwable.stackTraceAsString get(): String = Throwables.getStackTraceAsString(this)
+val Throwable.stackTraceAsString get() = stackTraceToString()
 
 inline fun <K, V>MutableMap<K, V>.putIfAbsent(key: K, block: () -> V): V? {
     var v = get(key)

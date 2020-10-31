@@ -64,7 +64,7 @@ class YoutrackTelegramBot(
                         log.severe { "Failed to send message to Telegram: $data " }
                     }
                 }
-                log.fine(data)
+                log.fine { data }
             }
         }
     }
