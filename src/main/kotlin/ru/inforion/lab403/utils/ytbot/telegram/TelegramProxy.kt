@@ -17,7 +17,7 @@ import javax.net.ssl.SSLSession
 
 class TelegramProxy(val token: String, proxy: ProxyConfig? = null) {
     companion object {
-        private val log = logger()
+        val log = logger()
 
         private const val TELEGRAM_API_DOMAIN = "api.telegram.org"
 

@@ -13,15 +13,13 @@ import ru.inforion.lab403.utils.ytbot.youtrack.Processor
 import ru.inforion.lab403.utils.ytbot.youtrack.Youtrack
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Issue
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Project
-import java.io.DataInputStream
-import java.util.logging.Level
 
 class YoutrackTelegramBot(
     val startLastTimestamp: Long,
     private val appConfig: ApplicationConfig
 ) {
     companion object {
-        private val log = logger(Level.FINE)
+        val log = logger()
     }
 
     private val bots = mutableMapOf<String, TelegramProxy>()

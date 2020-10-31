@@ -10,12 +10,11 @@ import ru.inforion.lab403.utils.ytbot.youtrack.scheme.*
 import java.lang.RuntimeException
 import java.text.SimpleDateFormat
 import java.util.*
-import java.util.logging.Level
 import kotlin.collections.ArrayList
 
 class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appConfig: ApplicationConfig) {
     companion object {
-        val log = logger(Level.FINE)
+        val log = logger()
 
         private fun crop(string: String, size: Int) =
             if (string.length <= size) string else "${string.stretch(size)}..."

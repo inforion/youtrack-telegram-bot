@@ -1,5 +1,6 @@
 package ru.inforion.lab403.utils.ytbot
 
+import ru.inforion.lab403.common.logging.ALL
 import ru.inforion.lab403.common.logging.logger
 import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
 import ru.inforion.lab403.utils.ytbot.youtrack.Youtrack
@@ -9,7 +10,7 @@ import java.util.logging.Level
 
 class YoutrackChecker(val config: ApplicationConfig) {
     companion object {
-        private val log = logger(Level.ALL)
+        val log = logger(ALL)
     }
 
     fun check(project: String) {

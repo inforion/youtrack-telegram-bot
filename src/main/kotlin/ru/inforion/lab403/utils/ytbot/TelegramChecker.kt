@@ -4,6 +4,7 @@ import com.pengrad.telegrambot.UpdatesListener
 import com.pengrad.telegrambot.model.request.ParseMode
 import com.pengrad.telegrambot.request.SendMessage
 import com.pengrad.telegrambot.request.SendSticker
+import ru.inforion.lab403.common.logging.ALL
 import ru.inforion.lab403.common.logging.logger
 import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
 import ru.inforion.lab403.utils.ytbot.telegram.TelegramProxy
@@ -12,7 +13,7 @@ import kotlin.system.exitProcess
 
 class TelegramChecker(val config: ApplicationConfig) {
     companion object {
-        private val log = logger(Level.ALL)
+        val log = logger(ALL)
     }
 
     private fun stupidServer(chatId: Long, bot: TelegramProxy, hello: String) {

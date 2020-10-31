@@ -7,6 +7,7 @@ import com.github.kittinunf.fuel.httpPost
 import com.github.kittinunf.fuel.httpPut
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import ru.inforion.lab403.common.logging.INFO
 import ru.inforion.lab403.common.logging.logger
 import ru.inforion.lab403.utils.ytbot.config.TelegramUserConfig
 import ru.inforion.lab403.utils.ytbot.removeChars
@@ -15,11 +16,10 @@ import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Issue
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Project
 import java.text.SimpleDateFormat
 import java.util.*
-import java.util.logging.Level
 
 class Youtrack(val baseUrl: String, private val permToken: String) {
     companion object {
-        val log = logger(Level.INFO)
+        val log = logger(INFO)
 
         /**
          * Function to short call for generate object type token for Gson library
