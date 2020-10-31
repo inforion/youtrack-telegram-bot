@@ -1,15 +1,14 @@
 package ru.inforion.lab403.utils.ytbot.youtrack
 
-import com.github.kittinunf.fuel.core.FuelError
 import com.github.kittinunf.fuel.core.extensions.authentication
 import com.github.kittinunf.fuel.httpGet
-import com.github.kittinunf.fuel.httpPost
-import com.github.kittinunf.fuel.httpPut
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import ru.inforion.lab403.common.logging.INFO
 import ru.inforion.lab403.common.logging.logger
+import ru.inforion.lab403.utils.ytbot.concat
 import ru.inforion.lab403.utils.ytbot.config.TelegramUserConfig
+import ru.inforion.lab403.utils.ytbot.normalizeURL
 import ru.inforion.lab403.utils.ytbot.removeChars
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.ActivitiesPage
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Issue
@@ -109,6 +108,47 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
     fun activityPermlink(idReadable: String, activityId: String, inlineString: String) =
         markdownUrl("$baseUrl/issue/$idReadable#focus=streamItem-$activityId", inlineString)
 
+    enum class API { api, rest }
+
+    private fun httpGetJson(api: API, url: String, parameters: List<Pair<String, Any>>): String {
+        val request = "$baseUrl/${api.name}/$url"
+            .normalizeURL()
+            .httpGet(parameters)
+            // this is bug in [HttpClient.retrieveResponse] at line:
+            // val contentStream = dataStream(request, connection)?.decode(transferEncoding) ?: ByteArrayInputStream(ByteArray(0))
+            // decode has no case for charset=utf-8
+            // but when decodeContent disable it's ok
+            .also { it.executionOptions.decodeContent = false }
+            .authentication()
+            .bearer(permToken)
+            .header(
+                "Accept" to "application/json",
+                "Content-Type" to "application/json",
+                "Cache-Control" to "no-cache")
+
+        log.finest { request }
+
+        val result = request.responseString()
+
+        val response = result.second
+        val (string, error) = result.third
+
+        log.info { "${response.statusCode} <- ${response.url}" }
+
+        check(response.statusCode != -1) { "Internal error -> ${error!!.message}\n$request\n$response" }
+
+        check(response.statusCode == 200) { "HTTP request error\n$request\n$response" }
+
+        check(response.headers["Content-Type"].any { "application/json" in it }) {
+            "Wrong Content-Type for request\n$request\n$response"
+        }
+
+        check(error == null) { "Critical Fuel error -> ${error!!.message}\n$request\n$response" }
+        check(string != null) { "Critical Fuel error -> body is empty but should not be\n$request\n$response" }
+
+        return string
+    }
+
     /**
      * Make query and get response from Youtrack REST
      *
@@ -125,43 +165,13 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
         fields: String?,
         categories: Collection<CategoryId>?
     ): String {
-        var queryError: FuelError? = null
-        var queryBytes: ByteArray? = null
+        val parameters = mutableListOf<Pair<String, String>>().apply {
+            fields?.let { add("fields" to it.trim()) }
+            query?.let { add("query" to it.trim()) }
+            categories?.let { add("categories" to it.concat()) }
+        }
 
-        val parameters = mutableListOf<Pair<String, String>>()
-
-        if (fields != null)
-            parameters.add("fields" to fields.trim())
-
-        if (query != null)
-            parameters.add("query" to query.trim())
-
-        if (categories != null)
-            parameters.add("categories" to categories.joinToString(",") { it.name })
-
-        log.finer { "Requesting url=$url" }
-        parameters.forEach { log.fine { "${it.first} -> ${it.second}" } }
-
-        val request = "$baseUrl/api/$url"
-            .httpGet(parameters)
-            .authentication()
-            .bearer(permToken)
-            .response { request, response, (bytes, error) ->
-                log.finest { request.toString() }
-                log.finest { response.toString() }
-                queryBytes = bytes
-                queryError = error
-            }
-
-        request.join()
-
-        if (queryError != null)
-            throw RuntimeException(queryError!!.exception)
-
-        val bytes = queryBytes ?: throw RuntimeException("Empty query result received for $url...")
-        val result = bytes.toString(Charsets.UTF_8)
-        log.finest { "json = $result" }
-        return result
+        return httpGetJson(API.api, url, parameters)
     }
 
     /**
@@ -194,7 +204,7 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
         categories: Collection<CategoryId>? = null
     ): T {
         val json = queryRaw(url, query, fields, categories)
-        return mapper.fromJson<T>(json, token.type)
+        return mapper.fromJson(json, token.type)
     }
 
     /**
@@ -221,7 +231,7 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
         categories: Collection<CategoryId>? = null
     ): List<T> {
         val json = queryRaw(url, query, fields, categories)
-        return mapper.fromJson<List<T>>(json, token.type)
+        return mapper.fromJson(json, token.type)
     }
 
     /**
@@ -294,42 +304,19 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
         disableNotifications: Boolean = false,
         runAs: String? = null
     ) {
-        val url = "/rest/issue/$issueID/execute"
+        require(command != null || comment != null) { "command or comment must be set!" }
 
-        val parameters = mutableListOf<Pair<String, String>>()
+        val parameters = mutableListOf<Pair<String, String>>().apply {
+            command?.let { add("command" to it.trim()) }
+            comment?.let { add("comment" to it.trim()) }
+            group?.let { add("group" to it.trim()) }
+            runAs?.let { add("runAs" to it.trim()) }
 
-        if (command != null)
-            parameters.add("command" to command.trim())
-        else if (comment != null) {
-            parameters.add("command" to "comment")
-            parameters.add("comment" to comment.trim())
-        } else throw IllegalArgumentException("command or comment must be set!")
+            if (disableNotifications)
+                add("disableNotifications" to disableNotifications.toString())
+        }
 
-        if (group != null)
-            parameters.add("group" to group.trim())
-
-        if (disableNotifications)
-            parameters.add("disableNotifications" to disableNotifications.toString())
-
-        if (runAs != null)
-            parameters.add("runAs" to runAs.trim())
-
-        var queryError: FuelError? = null
-
-        val request = "$baseUrl$url"
-            .httpPost(parameters)
-            .authentication()
-            .bearer(permToken)
-            .response { request, response, (_, error) ->
-                log.finest { request.toString() }
-                log.finest { response.toString() }
-                queryError = error
-            }
-
-        request.join()
-
-        if (queryError != null)
-            throw RuntimeException(queryError!!.exception)
+        httpGetJson(API.rest, "issue/$issueID/execute", parameters)
     }
 
     /**
@@ -344,31 +331,13 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
         summary: String,
         description: String? = null
     ) {
-        val url = "/rest/issue"
+        val parameters = mutableListOf<Pair<String, String>>().apply {
+            add("project" to projectID)
+            add("summary" to summary)
 
-        val parameters = mutableListOf<Pair<String, String>>()
+            description?.let { add("description" to it) }
+        }
 
-        parameters.add("project" to projectID)
-        parameters.add("summary" to summary)
-
-        if (description != null)
-            parameters.add("description" to description)
-
-        var queryError: FuelError? = null
-
-        val request = "$baseUrl$url"
-            .httpPut(parameters)
-            .authentication()
-            .bearer(permToken)
-            .response { request, response, (_, error) ->
-                log.finest { request.toString() }
-                log.finest { response.toString() }
-                queryError = error
-            }
-
-        request.join()
-
-        if (queryError != null)
-            throw RuntimeException(queryError!!.exception)
+        httpGetJson(API.rest, "issue", parameters)
     }
 }

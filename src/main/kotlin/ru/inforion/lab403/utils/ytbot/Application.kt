@@ -1,13 +1,19 @@
 package ru.inforion.lab403.utils.ytbot
 
 import ru.inforion.lab403.common.extensions.BlockingValue
-import ru.inforion.lab403.common.extensions.argparse.ApplicationOptions
-import ru.inforion.lab403.common.extensions.argparse.flag
-import ru.inforion.lab403.common.extensions.argparse.parseArguments
-import ru.inforion.lab403.common.extensions.argparse.variable
+import ru.inforion.lab403.common.extensions.argparse.*
+import ru.inforion.lab403.common.extensions.toFile
 import ru.inforion.lab403.common.logging.logger
 import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
 import ru.inforion.lab403.utils.ytbot.youtrack.Youtrack
+import java.io.File
+import java.net.Socket
+import java.security.KeyStore
+import java.security.cert.CertificateFactory
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLSocketFactory
+import javax.net.ssl.TrustManagerFactory
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
@@ -49,24 +55,64 @@ object Application {
         System.`in`.close()
     }
 
-    class Options : ApplicationOptions("youtrack-telegram-bot", "Telegram bot to pass from Youtrack to Telegram channel") {
-        val config: String by variable("-c", "--config", "Path to the configuration file", required = true)
+    class Options : ApplicationOptions(
+        "youtrack-telegram-bot",
+        "Telegram bot to pass from Youtrack to Telegram channel"
+    ) {
+        val config: File by file("-c", "--config",
+            "Path to the configuration file", required = true, exists = true, canRead = true)
 
         val timestamp: Long? by variable("-t", "--timestamp", "Redefine starting last update timestamp")
 
-        val daemon: Int by variable("-d", "--daemon",
-            "Create daemon with specified update timeout in seconds (<= 86400)")
+        val daemon: Int by variable(
+            "-d", "--daemon",
+            "Create daemon with specified update timeout in seconds (<= 86400)"
+        )
+
+        val certificate: File? by file("-cert", "--cert",
+            "YouTrack server self-signed certificate", exists = true, canRead = true)
 
         val tgSendMessages by flag("-r", "--dont-send-messages", "Don't send messages to Telegram")
 
-        val tgStartServices by flag("-a", "--dont-start-services",
-            "Don't start command services for Telegram when in daemon mode")
+        val tgStartServices by flag(
+            "-a", "--dont-start-services",
+            "Don't start command services for Telegram when in daemon mode"
+        )
 
-        val checkTelegram: String? by variable("-tgc", "--check-telegram",
-            "Send message to telegram and exit. Format [chatProjectName:type:message], for message type=m")
+        val checkTelegram: String? by variable(
+            "-tgc", "--check-telegram",
+            "Send message to telegram and exit. Format [chatProjectName:type:message], for message type=m"
+        )
 
-        val checkYoutrack: String? by variable("-ytc", "--check-youtrack",
-            "Get project info from Youtrack. Format [projectName]")
+        val checkYoutrack: String? by variable(
+            "-ytc", "--check-youtrack",
+            "Get project info from Youtrack. Format [projectName]"
+        )
+    }
+
+    fun getSSLSocketFactory(file: File?): SSLSocketFactory {
+        if (file == null) return SSLSocketFactory.getDefault() as SSLSocketFactory
+
+        val certificate = CertificateFactory
+            .getInstance("X.509")
+            .generateCertificate(file.inputStream())
+
+        val keyStore = KeyStore
+            .getInstance(KeyStore.getDefaultType())
+            .also {
+                it.load(null, null)
+                it.setCertificateEntry("server", certificate)
+            }
+
+        val trustManagerFactory = TrustManagerFactory
+            .getInstance(TrustManagerFactory.getDefaultAlgorithm())
+            .also { it.init(keyStore) }
+
+        val sslContext = SSLContext
+            .getInstance("TLS")
+            .also { it.init(null, trustManagerFactory.trustManagers, null) }
+
+        return sslContext.socketFactory
     }
 
     @JvmStatic
@@ -74,6 +120,12 @@ object Application {
         val options = args.parseArguments<Options>()
 
         log.info { options.namespace }
+
+        if (options.certificate != null) {
+            log.info { "Setting up trusted certificate: '${options.certificate}'" }
+            val factory = getSSLSocketFactory(options.certificate)
+            HttpsURLConnection.setDefaultSSLSocketFactory(factory)
+        }
 
         val appConfig = ApplicationConfig.load(options.config)
 
@@ -119,7 +171,7 @@ object Application {
 
         val bot = YoutrackTelegramBot(lastTimestamp, appConfig)
 
-        with (options) {
+        with(options) {
             val datetime = Youtrack.makeTimedate(lastTimestamp)
             log.info { "Starting last timestamp=$lastTimestamp [$datetime] send=$tgSendMessages services=$tgStartServices" }
             if (daemon > 0) daemonize(bot, daemon, tgSendMessages, tgStartServices) else bot.execute(tgSendMessages)

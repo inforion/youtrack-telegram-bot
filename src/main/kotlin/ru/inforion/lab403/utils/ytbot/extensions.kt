@@ -2,10 +2,14 @@ package ru.inforion.lab403.utils.ytbot
 
 import ru.inforion.lab403.common.extensions.asInt
 import ru.inforion.lab403.common.extensions.get
-import java.io.PrintWriter
-import java.io.StringWriter
+import ru.inforion.lab403.utils.ytbot.youtrack.CategoryId
+import java.net.URI
 import java.util.*
 import kotlin.reflect.KProperty
+
+fun Collection<CategoryId>.concat() = joinToString(",") { it.name }
+
+fun String.normalizeURL() = URI(this).normalize().toString()
 
 inline fun <reified T: Enum<T>>enumValuesCollection(collection: MutableCollection<T> = mutableListOf()) =
     enumValues<T>().toCollection(collection)
@@ -23,13 +27,11 @@ inline fun <reified T: Enum<T>>enumValuesCollection(collection: MutableCollectio
  *      Project::name
  * )
  */
-fun fields(vararg args: Any): String {
-    return args.joinToString(",") {
-        when (it) {
-            is KProperty<*> -> it.name
-            is String -> it
-            else -> throw IllegalArgumentException("Wrong class of $it")
-        }
+fun fields(vararg args: Any) = args.joinToString(",") {
+    when (it) {
+        is KProperty<*> -> it.name
+        is String -> it
+        else -> throw IllegalArgumentException("Wrong class of $it")
     }
 }
 
@@ -51,7 +53,7 @@ fun KProperty<*>.with(vararg args: Any) = "$name(${fields(*args)})"
  * @return grouped list
  */
 fun <S, T> Collection<T>.groupSeriesBy(selector: (T) -> S): List<Pair<S, Collection<T>>> {
-    if (this.isEmpty())
+    if (isEmpty())
         return emptyList()
 
     val result = ArrayList<Pair<S, Collection<T>>>()
@@ -91,11 +93,3 @@ inline val Int.asIPAddress get() = "${this[31..24]}.${this[23..16]}.${this[15..8
 inline val Long.asIPAddress get() = asInt.asIPAddress
 
 val Throwable.stackTraceAsString get() = stackTraceToString()
-
-inline fun <K, V>MutableMap<K, V>.putIfAbsent(key: K, block: () -> V): V? {
-    var v = get(key)
-    if (v == null) {
-        v = put(key, block())
-    }
-    return v
-}

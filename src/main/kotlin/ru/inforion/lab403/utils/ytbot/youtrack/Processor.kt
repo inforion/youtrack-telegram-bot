@@ -44,20 +44,11 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         throw RuntimeException("Added or Removed must be not empty!")
     }
 
-    private fun processInternalCustomField(presentation: String, value: Any?): String {
-        val fields = try {
-            value as LinkedTreeMap<String, String>
-        } catch (error: ClassCastException) {
-            if (value != null)
-                log.severe { "$presentation: can't process $value" }
-
-            return "$presentation: -"
-        }
-
-        val data = fields["name"]!!
-        val second = when (presentation) {
+    private fun processInternalCustomFieldMapValue(presentation: String, fields: Map<String, String>): String {
+        val data = fields.getValue("name")
+        return when (presentation) {
             in appConfig.userCustomFields -> {
-                val login = fields["login"]!!
+                val login = fields.getValue("login")
                 val ringId = fields["ringId"]
                 youtrack.tagUsername(login, ringId, appConfig.users)
             }
@@ -67,8 +58,28 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
             }
             else -> escapeMarkdown(data)
         }
-        return "$presentation: $second"
     }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun processInternalCustomField(presentation: String, value: Any?) = runCatching {
+        val second = when (value) {
+            is Map<*, *> -> processInternalCustomFieldMapValue(presentation, value as Map<String, String>)
+
+            is List<*> -> value.joinToString {
+                processInternalCustomFieldMapValue(presentation, it as Map<String, String>)
+            }
+
+            null -> "-"
+
+            else -> {
+                log.severe { "$presentation: can't process $value" }
+                value.toString()
+            }
+        }
+        "$presentation: $second"
+    }.onFailure {
+        log.severe { "Can't parse field '$presentation' with '$value' -> $it" }
+    }.getOrElse { "$presentation: $value" }
 
     private fun processInternalDescription(description: String?) =
         if (description != null) escapeMarkdown(crop(description, appConfig.descriptionMaxChars)) else emptyString
@@ -215,15 +226,16 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
             timestamp = activities.map {
                 val time = sdfFine.format(Date(it.timestamp))
                 val activityPermlink = youtrack.activityPermlink(issue.idReadable, it.id, time)
-                val activityText = try {
+
+                val activityText = runCatching {
                     processor(project, issue, it)
-                } catch (e: Throwable) {
-                    log.severe { "Critical error: ${e.message}: ${e.stackTrace}" }
-                    "Unexpected error occurred: ${e.message}. See log..."
+                }.onFailure {
+                    log.severe { "${it.message}\n${it.stackTraceAsString}" }
                 }
+
                 append("\n- $activityPermlink $activityText")
                 it.timestamp
-            }.max() ?: 0
+            }.maxOrNull() ?: 0
         }
 
         if (appConfig.isCategoryActive(category.id))
@@ -310,10 +322,10 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
             .forEach { (author, authorActivities) ->
                 authorActivities
                     .groupBy { Date(it.timestamp / timeGroupInterval * timeGroupInterval) }
-                    .forEach { date, dateActivities ->
+                    .forEach { (date, dateActivities) ->
                         dateActivities
                             .groupBy { it.category }
-                            .forEach { category, activities ->
+                            .forEach { (category, activities) ->
                                 processActivitiesByCategory(
                                     issue,
                                     date,

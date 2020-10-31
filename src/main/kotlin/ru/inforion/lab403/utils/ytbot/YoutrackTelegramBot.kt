@@ -28,7 +28,7 @@ class YoutrackTelegramBot(
         bots.getOrPut(config.token) { TelegramProxy(config.token, appConfig.proxy) }
 
     private fun createIfAbsentTelegramProxy(config: ProjectConfig) =
-        bots.putIfAbsent(config.token) { TelegramProxy(config.token, appConfig.proxy) }
+        bots.getOrPut(config.token) { TelegramProxy(config.token, appConfig.proxy) }
 
     private val youtrack by lazy { Youtrack(appConfig.youtrack.baseUrl, appConfig.youtrack.token) }
 
