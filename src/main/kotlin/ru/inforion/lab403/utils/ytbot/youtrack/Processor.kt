@@ -24,22 +24,26 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
             .replace("*", "\\*")
     }
 
-    private fun processAddedRemoved(activity: Activity, block: (ArrayList<LinkedTreeMap<String, String>>) -> String): String {
+    private fun processAddedRemoved(activity: Activity, block: (ArrayList<LinkedTreeMap<String, String>>) -> String?): String {
         log.finer { activity.added.toString() }
 
         @Suppress("UNCHECKED_CAST")
         val added = activity.added as ArrayList<LinkedTreeMap<String, String>>
 
-        if (added.isNotEmpty())
-            return "Added ${block(added)}"
+        if (added.isNotEmpty()) {
+            val result = block(added)
+            return if (appConfig.omitEmptyFields && result == null) emptyString else "Added $result"
+        }
 
         log.finer { activity.removed.toString() }
 
         @Suppress("UNCHECKED_CAST")
         val removed = activity.removed as ArrayList<LinkedTreeMap<String, String>>
 
-        if (removed.isNotEmpty())
-            return "Removed ${block(removed)}"
+        if (removed.isNotEmpty()) {
+            val result = block(removed)
+            return if (appConfig.omitEmptyFields && result == null) emptyString else "Removed $result"
+        }
 
         throw RuntimeException("Added or Removed must be not empty!")
     }
@@ -65,18 +69,22 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         val second = when (value) {
             is Map<*, *> -> processInternalCustomFieldMapValue(presentation, value as Map<String, String>)
 
-            is List<*> -> value.joinToString {
-                processInternalCustomFieldMapValue(presentation, it as Map<String, String>)
+            is List<*> -> {
+                val result = value.joinToString {
+                    processInternalCustomFieldMapValue(presentation, it as Map<String, String>)
+                }
+
+                if (appConfig.omitEmptyFields && result.isBlank()) null else result
             }
 
-            null -> "-"
+            null -> if (appConfig.omitEmptyFields) null else "-"
 
             else -> {
                 log.severe { "$presentation: can't process $value" }
                 value.toString()
             }
         }
-        "$presentation: $second"
+        if (second == null) null else "$presentation: $second"
     }.onFailure {
         log.severe { "Can't parse field '$presentation' with '$value' -> $it" }
     }.getOrElse { "$presentation: $value" }
@@ -87,7 +95,8 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
     private fun processIssueCreatedActivity(project: Project, issue: Issue, activity: Activity): String {
         val stringFields = issue.fields
             .filter { it.name !in appConfig.userCustomFields }
-            .joinToString("\n ") { processInternalCustomField(it.name, it.value) }
+            .mapNotNull { processInternalCustomField(it.name, it.value) }
+            .joinToString("\n ")
         val vDesc = processInternalDescription(issue.description)
         val vvDesc = if (vDesc.isNotBlank()) "\n$vDesc" else ""
         val summary = escapeMarkdown(issue.summary)
@@ -220,7 +229,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
             // Add all user fields
             issue.fields
                 .filter { it.name in appConfig.userCustomFields }
-                .map { processInternalCustomField(it.name, it.value) }
+                .mapNotNull { processInternalCustomField(it.name, it.value) }
                 .forEach { append("\n- $it") }
 
             timestamp = activities.map {
@@ -230,10 +239,12 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
                 val activityText = runCatching {
                     processor(project, issue, it)
                 }.onFailure {
-                    log.severe { "${it.message}\n${it.stackTraceAsString}" }
-                }
+                    log.severe { "${it.message}\n${it.stackTraceToString()}" }
+                }.getOrNull() ?: ""
 
-                append("\n- $activityPermlink $activityText")
+                if (!appConfig.omitEmptyFields || activityText.isNotBlank())
+                    append("\n- $activityPermlink $activityText")
+
                 it.timestamp
             }.maxOrNull() ?: 0
         }

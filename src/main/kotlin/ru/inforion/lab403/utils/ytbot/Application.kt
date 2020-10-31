@@ -2,12 +2,10 @@ package ru.inforion.lab403.utils.ytbot
 
 import ru.inforion.lab403.common.extensions.BlockingValue
 import ru.inforion.lab403.common.extensions.argparse.*
-import ru.inforion.lab403.common.extensions.toFile
 import ru.inforion.lab403.common.logging.logger
 import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
 import ru.inforion.lab403.utils.ytbot.youtrack.Youtrack
 import java.io.File
-import java.net.Socket
 import java.security.KeyStore
 import java.security.cert.CertificateFactory
 import javax.net.ssl.HttpsURLConnection
@@ -23,21 +21,19 @@ object Application {
 
     private fun daemonize(
         bot: YoutrackTelegramBot,
-        daemon: Int,
-        tgSendMessages: Boolean,
-        tgStartServices: Boolean
+        options: Options
     ) {
         log.info { "Starting daemon... press enter to stop daemon" }
 
         val stopNotify = BlockingValue<Int>()
         var currentLastTimestamp = bot.startLastTimestamp
 
-        if (tgStartServices)
+        if (!options.dontStartServices)
             bot.createCommandServices()
 
         val worker = thread {
-            while (stopNotify.poll(daemon * 1000L) == null) {
-                bot.execute(tgSendMessages, currentLastTimestamp)
+            while (stopNotify.poll(options.daemon * 1000L) == null) {
+                bot.execute(options, currentLastTimestamp)
                 currentLastTimestamp = bot.loadCurrentLastTimestamp()
             }
         }
@@ -53,41 +49,6 @@ object Application {
 
         // If something goes wrong stop reader hardcore
         System.`in`.close()
-    }
-
-    class Options : ApplicationOptions(
-        "youtrack-telegram-bot",
-        "Telegram bot to pass from Youtrack to Telegram channel"
-    ) {
-        val config: File by file("-c", "--config",
-            "Path to the configuration file", required = true, exists = true, canRead = true)
-
-        val timestamp: Long? by variable("-t", "--timestamp", "Redefine starting last update timestamp")
-
-        val daemon: Int by variable(
-            "-d", "--daemon",
-            "Create daemon with specified update timeout in seconds (<= 86400)"
-        )
-
-        val certificate: File? by file("-cert", "--cert",
-            "YouTrack server self-signed certificate", exists = true, canRead = true)
-
-        val tgSendMessages by flag("-r", "--dont-send-messages", "Don't send messages to Telegram")
-
-        val tgStartServices by flag(
-            "-a", "--dont-start-services",
-            "Don't start command services for Telegram when in daemon mode"
-        )
-
-        val checkTelegram: String? by variable(
-            "-tgc", "--check-telegram",
-            "Send message to telegram and exit. Format [chatProjectName:type:message], for message type=m"
-        )
-
-        val checkYoutrack: String? by variable(
-            "-ytc", "--check-youtrack",
-            "Get project info from Youtrack. Format [projectName]"
-        )
     }
 
     fun getSSLSocketFactory(file: File?): SSLSocketFactory {
@@ -173,8 +134,8 @@ object Application {
 
         with(options) {
             val datetime = Youtrack.makeTimedate(lastTimestamp)
-            log.info { "Starting last timestamp=$lastTimestamp [$datetime] send=$tgSendMessages services=$tgStartServices" }
-            if (daemon > 0) daemonize(bot, daemon, tgSendMessages, tgStartServices) else bot.execute(tgSendMessages)
+            log.info { "Starting last timestamp=$lastTimestamp [$datetime] send=${!dontSendMessage} services=${!dontStartServices}" }
+            if (daemon > 0) daemonize(bot, options) else bot.execute(options, lastTimestamp)
         }
     }
 }

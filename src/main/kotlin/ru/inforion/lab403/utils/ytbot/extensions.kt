@@ -91,5 +91,3 @@ fun String.removeChars(chars: String, ignoreCase: Boolean = false)
 inline val Int.asIPAddress get() = "${this[31..24]}.${this[23..16]}.${this[15..8]}.${this[7..0]}"
 
 inline val Long.asIPAddress get() = asInt.asIPAddress
-
-val Throwable.stackTraceAsString get() = stackTraceToString()

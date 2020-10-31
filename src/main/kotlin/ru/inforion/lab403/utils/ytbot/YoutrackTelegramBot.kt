@@ -27,14 +27,11 @@ class YoutrackTelegramBot(
     private fun createOrGetTelegramProxy(config: ProjectConfig) =
         bots.getOrPut(config.token) { TelegramProxy(config.token, appConfig.proxy) }
 
-    private fun createIfAbsentTelegramProxy(config: ProjectConfig) =
-        bots.getOrPut(config.token) { TelegramProxy(config.token, appConfig.proxy) }
-
     private val youtrack by lazy { Youtrack(appConfig.youtrack.baseUrl, appConfig.youtrack.token) }
 
     fun loadCurrentLastTimestamp() = appConfig.loadTimestamp()
 
-    fun execute(tgSendMessages: Boolean, lastTimestamp: Long = startLastTimestamp) {
+    fun execute(options: Options, lastTimestamp: Long = startLastTimestamp) {
         log.finer {
             val date = Youtrack.makeTimedate(lastTimestamp)
             "Parsing Youtrack activity timestamp=$lastTimestamp [$date]"
@@ -53,13 +50,22 @@ class YoutrackTelegramBot(
             val bot = createOrGetTelegramProxy(projectConfig)
             val project = projects.first { it.name == projectConfig.name }
             processor.processProject(project) { data ->
-                if (tgSendMessages) {
+                if (!options.dontSendMessage) {
                     val message = SendMessage(projectConfig.chatId, data)
                         .parseMode(ParseMode.Markdown)
                     log.finest { "Sending chatId = ${projectConfig.chatId} message $message" }
-                    val response = bot.execute(message)
-                    if (response.message() == null) {
-                        log.severe { "Failed to send message to Telegram: $data " }
+                    var errorOccurred = false
+                    repeat(appConfig.telegramSendRetries) {
+                        val response = bot.execute(message)
+                        if (response.message() == null) {
+                            log.severe { "Failed to send message to Telegram[${response.errorCode()}]:\n$data " }
+                            errorOccurred = true
+                            Thread.sleep(500)
+                        } else {
+                            if (errorOccurred)
+                                log.info { "Message send ok" }
+                            return@repeat
+                        }
                     }
                 }
                 log.fine { data }
@@ -162,7 +168,7 @@ class YoutrackTelegramBot(
         youtrack
             .runCatching { command(issues[userId]!!.idReadable, command, comment) }
             .onFailure {
-                log.severe { it.stackTraceAsString }
+                log.severe { it.stackTraceToString() }
                 sendTextMessage(bot, chatId, "Can't execute command: ${it.message}")
             }
     }
@@ -177,7 +183,7 @@ class YoutrackTelegramBot(
         youtrack
             .runCatching { issue(projects[userId]!!.shortName, summary, description) }
             .onFailure {
-                log.severe { it.stackTraceAsString }
+                log.severe { it.stackTraceToString() }
                 sendTextMessage(bot, chatId, "Can't create issue: ${it.message}")
             }
     }
@@ -307,7 +313,7 @@ class YoutrackTelegramBot(
     }
 
     private fun failProcessMessage(update: Update?, error: Throwable) {
-        val trace = error.stackTraceAsString
+        val trace = error.stackTraceToString()
         log.severe { "Error occurred when parsing $update: ${error.message}\n$trace" }
     }
 
@@ -315,19 +321,20 @@ class YoutrackTelegramBot(
         // for only unique project names avoid to create duplicates
         appConfig
             .projects
-            .mapNotNull { createIfAbsentTelegramProxy(it) }
+            .map { createOrGetTelegramProxy(it) }
+            .distinctBy { it.token }
             .forEach { bot ->
-            log.info { "Starting listener for bot = ${bot.token}" }
-            val listener = UpdatesListener { updates ->
-                updates.forEach { update ->
-                    update
-                        .runCatching { tryProcessMessage(bot, update) }
-                        .onFailure { error -> failProcessMessage(update, error) }
+                log.info { "Starting listener for bot = ${bot.token}" }
+                val listener = UpdatesListener { updates ->
+                    updates.forEach { update ->
+                        update
+                            .runCatching { tryProcessMessage(bot, update) }
+                            .onFailure { error -> failProcessMessage(update, error) }
+                    }
+                    log.finest { "Confirm all" }
+                    UpdatesListener.CONFIRMED_UPDATES_ALL
                 }
-                log.finest { "Confirm all" }
-                UpdatesListener.CONFIRMED_UPDATES_ALL
+                bot.setUpdatesListener(listener)
             }
-            bot.setUpdatesListener(listener)
-        }
     }
 }
