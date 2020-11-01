@@ -6,7 +6,6 @@ import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
 import ru.inforion.lab403.utils.ytbot.youtrack.Youtrack
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Issue
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Project
-import java.util.logging.Level
 
 class YoutrackChecker(val config: ApplicationConfig) {
     companion object {

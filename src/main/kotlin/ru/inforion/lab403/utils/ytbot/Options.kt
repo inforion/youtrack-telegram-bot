@@ -18,7 +18,7 @@ class Options : ApplicationOptions(
     val daemon: Int by variable(
         "-d", "--daemon",
         "Create daemon with specified update timeout in seconds (<= 86400)"
-    )
+    ) { -1 }
 
     val certificate: File? by file("-cert", "--cert",
         "YouTrack server self-signed certificate", exists = true, canRead = true)

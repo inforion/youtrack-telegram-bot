@@ -8,7 +8,6 @@ import ru.inforion.lab403.common.logging.ALL
 import ru.inforion.lab403.common.logging.logger
 import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
 import ru.inforion.lab403.utils.ytbot.telegram.TelegramProxy
-import java.util.logging.Level
 import kotlin.system.exitProcess
 
 class TelegramChecker(val config: ApplicationConfig) {

@@ -7,10 +7,8 @@ import ru.inforion.lab403.common.logging.logger
 import ru.inforion.lab403.utils.ytbot.*
 import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.*
-import java.lang.RuntimeException
 import java.text.SimpleDateFormat
 import java.util.*
-import kotlin.collections.ArrayList
 
 class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appConfig: ApplicationConfig) {
     companion object {
@@ -208,7 +206,8 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         val summary = escapeMarkdown(crop(issue.summary, appConfig.descriptionMaxChars))
 
         append("$dateString $tagId $summary")
-        append("\n- Author: $tagAuthor")
+
+        if (appConfig.showActivityAuthor) append("\n- Author: $tagAuthor")
 
         // Add all user fields
         issue.fields

@@ -10,9 +10,6 @@ import okhttp3.OkHttpClient
 import ru.inforion.lab403.common.logging.logger
 import ru.inforion.lab403.utils.ytbot.config.ProxyConfig
 import ru.inforion.lab403.utils.ytbot.config.ProxyDnsConfig
-import javax.net.ssl.HostnameVerifier
-import javax.net.ssl.SSLSession
-import kotlin.system.measureNanoTime
 
 
 class TelegramProxy constructor(val token: String, proxy: ProxyConfig? = null, val minimumMessageDelay: Long = 0) {
@@ -73,10 +70,11 @@ class TelegramProxy constructor(val token: String, proxy: ProxyConfig? = null, v
             val passed = now - lastMessageSendTime
             val waitAmount = minimumMessageDelay - passed
             if (waitAmount > 0) {
+                log.finer { "Waiting for $waitAmount ms" }
                 Thread.sleep(waitAmount)
-                lastMessageSendTime = System.currentTimeMillis()
             }
         }
+        lastMessageSendTime = System.currentTimeMillis()
     }
 
     private val bot = createTelegramBot(token, proxy)

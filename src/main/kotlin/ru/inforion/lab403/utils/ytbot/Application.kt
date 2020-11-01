@@ -1,7 +1,7 @@
 package ru.inforion.lab403.utils.ytbot
 
 import ru.inforion.lab403.common.extensions.BlockingValue
-import ru.inforion.lab403.common.extensions.argparse.*
+import ru.inforion.lab403.common.extensions.argparse.parseArguments
 import ru.inforion.lab403.common.logging.logger
 import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
 import ru.inforion.lab403.utils.ytbot.youtrack.Youtrack
@@ -19,11 +19,8 @@ import kotlin.system.exitProcess
 object Application {
     val log = logger()
 
-    private fun daemonize(
-        bot: YoutrackTelegramBot,
-        options: Options
-    ) {
-        log.info { "Starting daemon... press enter to stop daemon" }
+    private fun daemonize(bot: YoutrackTelegramBot, options: Options) {
+        log.info { "Starting daemon... print 'quit' without quotes and enter to stop daemon" }
 
         val stopNotify = BlockingValue<Int>()
         var currentLastTimestamp = bot.startLastTimestamp
@@ -38,20 +35,20 @@ object Application {
             }
         }
 
-        thread {
-            System.`in`.reader().read()
-            stopNotify.offer(0)
-        }
+        val reader = System.`in`.bufferedReader()
+        do { val line = reader.readLine() } while (line != "quit")
 
+        stopNotify.offer(0)
         worker.join()
-
         log.info { "Stopping youtrack-telegram-bot..." }
 
-        // If something goes wrong stop reader hardcore
-        System.`in`.close()
+        exitProcess(0)
     }
 
-    fun getSSLSocketFactory(file: File?): SSLSocketFactory {
+    /**
+     * Function creates ssl socket factory for self-signed trusted certificate
+     */
+    private fun getSSLSocketFactory(file: File?): SSLSocketFactory {
         if (file == null) return SSLSocketFactory.getDefault() as SSLSocketFactory
 
         val certificate = CertificateFactory
@@ -119,6 +116,8 @@ object Application {
         }
 
         log.info { "$appConfig" }
+
+        appConfig.createTimestampDirectories()
 
         val lastTimestamp = options.timestamp ?: appConfig.loadTimestamp()
 

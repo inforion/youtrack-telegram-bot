@@ -2,7 +2,10 @@ package ru.inforion.lab403.utils.ytbot.telegram
 
 import ru.inforion.lab403.common.extensions.*
 import ru.inforion.lab403.utils.ytbot.asIPAddress
-import java.io.*
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.DataInputStream
+import java.io.DataOutputStream
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress

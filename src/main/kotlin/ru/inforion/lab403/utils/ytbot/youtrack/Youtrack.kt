@@ -133,7 +133,7 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
         val response = result.second
         val (string, error) = result.third
 
-        log.info { "${response.statusCode} <- ${response.url}" }
+        log.fine { "${response.statusCode} <- ${response.url}" }
 
         check(response.statusCode != -1) { "Internal error -> ${error!!.message}\n$request\n$response" }
 
