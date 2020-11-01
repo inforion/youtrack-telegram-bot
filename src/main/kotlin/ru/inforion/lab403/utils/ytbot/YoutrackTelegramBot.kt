@@ -68,7 +68,7 @@ class YoutrackTelegramBot(
                         }
                     }
                 }
-                log.finer { data }
+                log.fine { data }
             }
         }
     }

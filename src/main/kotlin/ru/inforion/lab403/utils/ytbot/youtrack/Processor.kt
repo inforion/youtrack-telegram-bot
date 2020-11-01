@@ -198,42 +198,42 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         }
     }
 
+    private val sdfCoarse = SimpleDateFormat("dd.MM.YYYY")
+    private val sdfFine = SimpleDateFormat("HH:mm:ss")
+
+    private fun processIssueHeader(issue: Issue, date: Date, author: User) = buildString {
+        val dateString = sdfCoarse.format(date)
+        val tagId = youtrack.tagId(issue.idReadable)
+        val tagAuthor = youtrack.tagUsername(author.login, author.ringId, appConfig.users)
+        val summary = escapeMarkdown(crop(issue.summary, appConfig.descriptionMaxChars))
+
+        append("$dateString $tagId $summary")
+        append("\n- Author: $tagAuthor")
+
+        // Add all user fields
+        issue.fields
+            .filter { it.name in appConfig.userCustomFields }
+            .mapNotNull { processInternalCustomField(it.name, it.value) }
+            .forEach { append("\n- $it") }
+    }
+
     private fun processActivitiesByCategory(
         issue: Issue,
-        date: Date,
         project: Project,
-        author: User,
         category: Category,
-        activities: Collection<Activity>,
-        block: (String) -> Unit
-    ) {
+        activities: Collection<Activity>
+    ): String? {
         val processor = getProcessorBy(category)
 
         log.finer { "Processor: $processor" }
 
-        val sdfCoarse = SimpleDateFormat("dd.MM.YYYY")
-        val sdfFine = SimpleDateFormat("HH:mm:ss")
-
         var timestamp: Long = 0
+
+        val tagCategory = youtrack.tagCategory(category.id)
 
 //        val completeIssue = loadIssueComplete(issue.id)
 
         val result = buildString {
-            val dateString = sdfCoarse.format(date)
-            val tagId = youtrack.tagId(issue.idReadable)
-            val tagAuthor = youtrack.tagUsername(author.login, author.ringId, appConfig.users)
-            val tagCategory = youtrack.tagCategory(category.id)
-            val summary = escapeMarkdown(crop(issue.summary, appConfig.descriptionMaxChars))
-
-            append("$dateString $tagId $summary $tagCategory")
-            append("\n- Author: $tagAuthor")
-
-            // Add all user fields
-            issue.fields
-                .filter { it.name in appConfig.userCustomFields }
-                .mapNotNull { processInternalCustomField(it.name, it.value) }
-                .forEach { append("\n- $it") }
-
             timestamp = activities.map {
                 val time = sdfFine.format(Date(it.timestamp))
                 val activityPermlink = youtrack.activityPermlink(issue.idReadable, it.id, time)
@@ -244,17 +244,17 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
                     log.severe { "${it.message}\n${it.stackTraceToString()}" }
                 }.getOrNull() ?: ""
 
-                if (!appConfig.omitEmptyFields || activityText.isNotBlank())
-                    append("\n- $activityPermlink $activityText")
+                if (!appConfig.omitEmptyFields || activityText.isNotBlank()) {
+                    append("\n- $activityPermlink $tagCategory $activityText")
+                }
 
                 it.timestamp
             }.maxOrNull() ?: 0
         }
 
-        if (appConfig.isCategoryActive(category.id))
-            block(result)
-
         updateTimestamp(timestamp)
+
+        return if (appConfig.isCategoryActive(category.id)) result else null
     }
 
     private fun processIssue(issue: Issue, project: Project, block: (String) -> Unit) {
@@ -336,19 +336,15 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
                 authorActivities
                     .groupBy { Date(it.timestamp / timeGroupInterval * timeGroupInterval) }
                     .forEach { (date, dateActivities) ->
-                        dateActivities
+                        val header = processIssueHeader(issue, date, author)
+                        val body = dateActivities
                             .groupBy { it.category }
-                            .forEach { (category, activities) ->
-                                processActivitiesByCategory(
-                                    issue,
-                                    date,
-                                    project,
-                                    author,
-                                    category,
-                                    activities,
-                                    block
-                                )
-                            }
+                            .mapNotNull { (category, activities) ->
+                                processActivitiesByCategory(issue, project, category, activities)
+                            }.joinToString("")
+
+                        if (body.isNotBlank())
+                            block("$header$body")
                     }
             }
     }
