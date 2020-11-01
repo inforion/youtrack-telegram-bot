@@ -110,7 +110,7 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
 
     enum class API { api, rest }
 
-    private fun httpGetJson(api: API, url: String, parameters: List<Pair<String, Any>>): String {
+    private fun httpGet(api: API, url: String, parameters: List<Pair<String, Any>>): String {
         val request = "$baseUrl/${api.name}/$url"
             .normalizeURL()
             .httpGet(parameters)
@@ -171,7 +171,7 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
             categories?.let { add("categories" to it.concat()) }
         }
 
-        return httpGetJson(API.api, url, parameters)
+        return httpGet(API.api, url, parameters)
     }
 
     /**
@@ -316,7 +316,7 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
                 add("disableNotifications" to disableNotifications.toString())
         }
 
-        httpGetJson(API.rest, "issue/$issueID/execute", parameters)
+        httpGet(API.rest, "issue/$issueID/execute", parameters)
     }
 
     /**
@@ -338,6 +338,6 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
             description?.let { add("description" to it) }
         }
 
-        httpGetJson(API.rest, "issue", parameters)
+        httpGet(API.rest, "issue", parameters)
     }
 }

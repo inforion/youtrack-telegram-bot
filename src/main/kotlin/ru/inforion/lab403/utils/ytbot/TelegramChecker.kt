@@ -47,7 +47,7 @@ class TelegramChecker(val config: ApplicationConfig) {
     fun check(project: String, type: String, message: String) {
         val projectConfig = config.projects.first { it.name == project }
 
-        val bot = TelegramProxy(projectConfig.token, config.proxy)
+        val bot = TelegramProxy(projectConfig.token, config.proxy, config.telegramMinimumMessageDelay)
 
         val chatId = projectConfig.chatId
 
@@ -68,7 +68,7 @@ class TelegramChecker(val config: ApplicationConfig) {
             }
         }
 
-        log.info { "isOk=${response.isOk} error=${response.errorCode()}" }
+        log.info { "isOk=${response.isOk} error=${response.errorCode()} desc=${response.description()}" }
 
         if (response.message() == null) {
             log.severe { "Message send failed!" }

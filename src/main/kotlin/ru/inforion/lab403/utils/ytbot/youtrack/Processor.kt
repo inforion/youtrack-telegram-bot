@@ -114,7 +114,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
 
     private fun processCommentActivity(project: Project, issue: Issue, activity: Activity) =
         processAddedRemoved(activity) {
-            var text = it[0]["text"]!!
+            var text = escapeMarkdown(it[0]["text"]!!)
             if (appConfig.users != null) {
                 appConfig.users.keys.forEach {
                     val name = "@$it"
@@ -131,7 +131,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         @Suppress("UNCHECKED_CAST")
         val added = activity.added as ArrayList<LinkedTreeMap<String, String>>
 
-        val text = added[0]["text"]!!.trim()
+        val text = escapeMarkdown(added[0]["text"]!!.trim())
         val urls = added[0]["urls"]
 
         val tagged = text.replace("#${project.shortName}-", "#${project.shortName}")
@@ -208,6 +208,8 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         block: (String) -> Unit
     ) {
         val processor = getProcessorBy(category)
+
+        log.finer { "Processor: $processor" }
 
         val sdfCoarse = SimpleDateFormat("dd.MM.YYYY")
         val sdfFine = SimpleDateFormat("HH:mm:ss")

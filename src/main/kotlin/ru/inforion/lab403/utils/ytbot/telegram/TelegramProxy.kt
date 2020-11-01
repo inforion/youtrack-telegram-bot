@@ -12,10 +12,10 @@ import ru.inforion.lab403.utils.ytbot.config.ProxyConfig
 import ru.inforion.lab403.utils.ytbot.config.ProxyDnsConfig
 import javax.net.ssl.HostnameVerifier
 import javax.net.ssl.SSLSession
+import kotlin.system.measureNanoTime
 
 
-
-class TelegramProxy(val token: String, proxy: ProxyConfig? = null) {
+class TelegramProxy constructor(val token: String, proxy: ProxyConfig? = null, val minimumMessageDelay: Long = 0) {
     companion object {
         val log = logger()
 
@@ -65,11 +65,31 @@ class TelegramProxy(val token: String, proxy: ProxyConfig? = null) {
         }
     }
 
+    private var lastMessageSendTime = -1L
+
+    private fun waitIfRequired() {
+        val now = System.currentTimeMillis()
+        if (lastMessageSendTime != -1L) {
+            val passed = now - lastMessageSendTime
+            val waitAmount = minimumMessageDelay - passed
+            if (waitAmount > 0) {
+                Thread.sleep(waitAmount)
+                lastMessageSendTime = System.currentTimeMillis()
+            }
+        }
+    }
+
     private val bot = createTelegramBot(token, proxy)
 
-    fun <T : BaseRequest<*, *>, R : BaseResponse> execute(request: BaseRequest<T, R>): R = bot.execute(request)
+    fun <T : BaseRequest<*, *>, R : BaseResponse> execute(request: BaseRequest<T, R>): R {
+        waitIfRequired()
+        return bot.execute(request)
+    }
 
-    fun <T : BaseRequest<T, R>, R : BaseResponse> execute(request: T, callback: Callback<T, R>) = bot.execute(request, callback)
+    fun <T : BaseRequest<T, R>, R : BaseResponse> execute(request: T, callback: Callback<T, R>) {
+        waitIfRequired()
+        bot.execute(request, callback)
+    }
 
     fun setUpdatesListener(listener: UpdatesListener) = bot.setUpdatesListener(listener, GetUpdates())
 

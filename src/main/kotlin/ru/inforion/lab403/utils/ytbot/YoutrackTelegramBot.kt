@@ -25,7 +25,7 @@ class YoutrackTelegramBot(
     private val bots = mutableMapOf<String, TelegramProxy>()
 
     private fun createOrGetTelegramProxy(config: ProjectConfig) =
-        bots.getOrPut(config.token) { TelegramProxy(config.token, appConfig.proxy) }
+        bots.getOrPut(config.token) { TelegramProxy(config.token, appConfig.proxy, appConfig.telegramMinimumMessageDelay) }
 
     private val youtrack by lazy { Youtrack(appConfig.youtrack.baseUrl, appConfig.youtrack.token) }
 
@@ -55,12 +55,12 @@ class YoutrackTelegramBot(
                         .parseMode(ParseMode.Markdown)
                     log.finest { "Sending chatId = ${projectConfig.chatId} message $message" }
                     var errorOccurred = false
-                    repeat(appConfig.telegramSendRetries) {
+                    repeat(appConfig.telegramSendRetriesCount) {
                         val response = bot.execute(message)
                         if (response.message() == null) {
                             log.severe { "Failed to send message to Telegram[${response.errorCode()}]:\n$data " }
                             errorOccurred = true
-                            Thread.sleep(500)
+                            Thread.sleep(appConfig.telegramSendRetriesTimeout)
                         } else {
                             if (errorOccurred)
                                 log.info { "Message send ok" }
@@ -68,7 +68,7 @@ class YoutrackTelegramBot(
                         }
                     }
                 }
-                log.fine { data }
+                log.finer { data }
             }
         }
     }
