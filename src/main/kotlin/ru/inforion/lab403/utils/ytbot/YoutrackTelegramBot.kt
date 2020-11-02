@@ -31,6 +31,24 @@ class YoutrackTelegramBot(
 
     fun loadCurrentLastTimestamp() = appConfig.loadTimestamp()
 
+    private fun doSend(bot: TelegramProxy, message: SendMessage, number: Int): Boolean {
+        log.warning { "sending message try ${number}/${appConfig.telegramSendRetriesCount}" }
+
+        val response = bot
+            .runCatching { execute(message) }
+            .getOrElse {
+                log.severe { it }
+                return false
+            }
+
+        if (response.message() == null) {
+            log.severe { "Telegram response with error[${response.errorCode()}]:\n$message" }
+            return false
+        }
+
+        return true
+    }
+
     fun execute(options: Options, lastTimestamp: Long = startLastTimestamp) {
         log.finer {
             val date = Youtrack.makeTimedate(lastTimestamp)
@@ -54,25 +72,18 @@ class YoutrackTelegramBot(
                     val message = SendMessage(projectConfig.chatId, data)
                         .parseMode(ParseMode.Markdown)
                     log.finest { "Sending chatId = ${projectConfig.chatId} message $message" }
+
                     var errorOccurred = false
-                    repeat(appConfig.telegramSendRetriesCount) {
-                        val response = bot
-                            .runCatching { execute(message) }
-                            .onFailure { log.severe { it } }
-                            .getOrNull()
-
-                        if (response?.message() == null) {
-                            errorOccurred = true
-
-                            if (response != null && response.message() == null)
-                                log.severe { "Telegram response with error[${response.errorCode()}]:\n$data " }
-
-                            Thread.sleep(appConfig.telegramSendRetriesTimeout)
-                        } else {
+                    // repeat wont break :(
+                    for (number in 0 until appConfig.telegramSendRetriesCount) {
+                        if (doSend(bot, message, number)) {
                             if (errorOccurred)
-                                log.info { "Message send ok" }
-                            return@repeat
+                                log.info { "Message send after error OK at try number ${number + 1}!" }
+                            break
                         }
+
+                        errorOccurred = true
+                        Thread.sleep(appConfig.telegramSendRetriesTimeout)
                     }
                 }
                 log.fine { data }
