@@ -63,19 +63,25 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
     /**
      * Creates tagged user name from login and Youtrack-Telegram mapping
      *
+     * @param tag text to show for before username for telegram tag
      * @param login user login in Youtrack
      * @param ringId user Hub connection (not used currently) perhaps make link to user in Youtrack
      * @param map Youtrack-Telegram mapping (from JSON-configuration)
      *
      * @return tagged user name with Telegram mention
      */
-    fun tagUsername(login: String, ringId: String?, map: Map<String, TelegramUserConfig>? = null): String {
+    fun tagUsername(
+        tag: String,
+        login: String,
+        ringId: String?,
+        map: Map<String, TelegramUserConfig>? = null
+    ): String {
         val tagName = login.removeChars('_', '.')
         if (map != null) {
             val tgUser = map[login]
             if (tgUser?.id != null) {
                 log.finest { "User with login = $login found -> telegram = $tgUser" }
-                val tgUserString = "[notify](tg://user?id=${tgUser.id}) #$tagName"
+                val tgUserString = "[$tag](tg://user?id=${tgUser.id}) #$tagName"
 
                 return if (ringId == null) tgUserString else
                     "$tgUserString${markdownUrl("$baseUrl/users/$ringId")}"

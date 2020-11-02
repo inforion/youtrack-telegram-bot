@@ -56,10 +56,17 @@ class YoutrackTelegramBot(
                     log.finest { "Sending chatId = ${projectConfig.chatId} message $message" }
                     var errorOccurred = false
                     repeat(appConfig.telegramSendRetriesCount) {
-                        val response = bot.execute(message)
-                        if (response.message() == null) {
-                            log.severe { "Failed to send message to Telegram[${response.errorCode()}]:\n$data " }
+                        val response = bot
+                            .runCatching { execute(message) }
+                            .onFailure { log.severe { it } }
+                            .getOrNull()
+
+                        if (response?.message() == null) {
                             errorOccurred = true
+
+                            if (response != null && response.message() == null)
+                                log.severe { "Telegram response with error[${response.errorCode()}]:\n$data " }
+
                             Thread.sleep(appConfig.telegramSendRetriesTimeout)
                         } else {
                             if (errorOccurred)
@@ -128,8 +135,6 @@ class YoutrackTelegramBot(
     }
 
     private fun setProjectAndIssue(userId: Int, bot: TelegramProxy, chatId: Long, params: String?): String? {
-        val others: String?
-
         val tokens = getCommandTokens(params, 2)
 
         if (tokens.isEmpty()) {
@@ -139,15 +144,13 @@ class YoutrackTelegramBot(
 
         val isFirstTokenIssueID = maybeIssueID(tokens[0])
 
-        if (isFirstTokenIssueID) {
+        val others = if (!isFirstTokenIssueID) params else {
             if (tokens.size < 2) {
                 sendTextMessage(bot, chatId, "Wrong format, use /<cmd> [IssueID] <youtrack_cmd>")
                 return null
             }
             setIssueTo(userId, bot, chatId, tokens[0])
-            others = tokens[1]
-        } else {
-            others = params
+            tokens[1]
         }
 
         if (projects[userId] == null || issues[userId] == null) {

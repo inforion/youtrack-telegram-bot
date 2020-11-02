@@ -52,7 +52,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
             in appConfig.userCustomFields -> {
                 val login = fields.getValue("login")
                 val ringId = fields["ringId"]
-                youtrack.tagUsername(login, ringId, appConfig.users)
+                youtrack.tagUsername("is", login, ringId, appConfig.users)
             }
             // Add hash tag to specific fields
             in appConfig.taggedCustomFields -> {
@@ -114,10 +114,10 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         processAddedRemoved(activity) {
             var text = escapeMarkdown(it[0]["text"]!!)
             if (appConfig.users != null) {
-                appConfig.users.keys.forEach {
-                    val name = "@$it"
+                appConfig.users.keys.forEach { username ->
+                    val name = "@$username"
                     if (name in text) {
-                        val tagUsername = youtrack.tagUsername(it, null, appConfig.users)
+                        val tagUsername = youtrack.tagUsername("by", username, null, appConfig.users)
                         text = text.replace(name, tagUsername)
                     }
                 }
@@ -202,12 +202,10 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
     private fun processIssueHeader(issue: Issue, date: Date, author: User) = buildString {
         val dateString = sdfCoarse.format(date)
         val tagId = youtrack.tagId(issue.idReadable)
-        val tagAuthor = youtrack.tagUsername(author.login, author.ringId, appConfig.users)
+        val tagAuthor = youtrack.tagUsername("authored by", author.login, author.ringId, appConfig.users)
         val summary = escapeMarkdown(crop(issue.summary, appConfig.descriptionMaxChars))
 
-        append("$dateString $tagId $summary")
-
-        if (appConfig.showActivityAuthor) append("\n- Author: $tagAuthor")
+        append("$dateString $tagId $summary $tagAuthor")
 
         // Add all user fields
         issue.fields
