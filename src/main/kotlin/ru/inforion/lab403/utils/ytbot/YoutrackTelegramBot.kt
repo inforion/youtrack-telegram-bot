@@ -183,7 +183,8 @@ class YoutrackTelegramBot(
             .runCatching { command(issues[userId]!!.idReadable, command, comment) }
             .onFailure {
                 log.severe { it.stackTraceToString() }
-                sendTextMessage(bot, chatId, "Can't execute command: ${it.message}")
+                // may lead to vulnerability cus send back bearer
+                // sendTextMessage(bot, chatId, "Can't execute command: ${it.message}")
             }
     }
 
