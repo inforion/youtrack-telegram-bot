@@ -20,6 +20,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         private fun escapeMarkdown(string: String) = string
             .replace("_", "\\_")
             .replace("*", "\\*")
+            .replace("[", "\\[")  // escape ] not required
     }
 
     private fun processAddedRemoved(activity: Activity, block: (ArrayList<LinkedTreeMap<String, String>>) -> String?): String {
@@ -132,7 +133,9 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         val text = escapeMarkdown(added[0]["text"]!!.trim())
         val urls = added[0]["urls"]
 
-        val tagged = text.replace("#${project.shortName}-", "#${project.shortName}")
+        val cropText = if (appConfig.commitFirstLineOnly) text.lines().first() else text
+
+        val tagged = cropText.replace("#${project.shortName}-", "#${project.shortName}")
 
         return if (urls != null) "Added commit: [$tagged]($urls)" else "Added commit: $tagged"
     }

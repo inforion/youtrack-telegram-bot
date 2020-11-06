@@ -18,6 +18,7 @@ data class ApplicationConfig constructor(
     val telegramSendRetriesCount: Int,
     val telegramSendRetriesTimeout: Long,
     val taggedCustomFields: List<String>,
+    val commitFirstLineOnly: Boolean,
     val showActivityAuthor: Boolean,
     val userCustomFields: List<String>,
     val users: Map<String, TelegramUserConfig>?,
