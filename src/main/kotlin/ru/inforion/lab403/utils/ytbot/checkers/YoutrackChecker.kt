@@ -1,8 +1,9 @@
-package ru.inforion.lab403.utils.ytbot
+package ru.inforion.lab403.utils.ytbot.checkers
 
 import ru.inforion.lab403.common.logging.ALL
 import ru.inforion.lab403.common.logging.logger
 import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
+import ru.inforion.lab403.utils.ytbot.fields
 import ru.inforion.lab403.utils.ytbot.youtrack.Youtrack
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Issue
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Project

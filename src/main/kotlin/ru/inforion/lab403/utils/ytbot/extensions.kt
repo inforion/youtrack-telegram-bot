@@ -1,9 +1,9 @@
 package ru.inforion.lab403.utils.ytbot
 
-import ru.inforion.lab403.common.extensions.asInt
-import ru.inforion.lab403.common.extensions.get
+import ru.inforion.lab403.common.extensions.*
 import ru.inforion.lab403.utils.ytbot.youtrack.CategoryId
 import java.net.URI
+import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.reflect.KProperty
 
@@ -91,3 +91,19 @@ fun String.removeChars(chars: String, ignoreCase: Boolean = false)
 inline val Int.asIPAddress get() = "${this[31..24]}.${this[23..16]}.${this[15..8]}.${this[7..0]}"
 
 inline val Long.asIPAddress get() = asInt.asIPAddress
+
+
+private val timedateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss").apply {
+    timeZone = TimeZone.getTimeZone("UTC")
+}
+
+val Long.asDatetime get() = timedateFormat.format(this)
+
+fun String.escapeMarkdown() =
+    replace("_", "\\_")
+    .replace("*", "\\*")
+    .replace("[", "\\[")  // escape ] not required
+
+fun String.removeMarkdownCode() = replaceBetween("```", "```", "<multiline-code>")
+
+fun String.crop(size: Int) = if (length <= size) this else "${stretch(size)}..."

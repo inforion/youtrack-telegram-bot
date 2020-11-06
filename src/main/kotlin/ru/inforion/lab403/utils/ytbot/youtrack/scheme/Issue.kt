@@ -1,12 +1,12 @@
 package ru.inforion.lab403.utils.ytbot.youtrack.scheme
 
 data class Issue(
-    val attachment: MutableCollection<IssueAttachment>,
+    val attachment: MutableCollection<IssueAttachment>?,
     val comments: MutableCollection<IssueComment>,
     val commentsCount: Long,
     val created: Long,
     val customFields: List<CustomField>,
-    val description: String,
+    val description: String?,
     val draftComment: DraftIssueComment,
     val draftOwner: User,
     val externalIssue: ExternalIssue,

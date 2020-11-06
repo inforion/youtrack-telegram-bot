@@ -70,7 +70,7 @@ class TelegramProxy constructor(val token: String, proxy: ProxyConfig? = null, v
             val passed = now - lastMessageSendTime
             val waitAmount = minimumMessageDelay - passed
             if (waitAmount > 0) {
-                log.finer { "Waiting for $waitAmount ms" }
+                log.warning { "Waiting for $waitAmount ms" }
                 Thread.sleep(waitAmount)
             }
         }

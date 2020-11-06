@@ -3,8 +3,11 @@ package ru.inforion.lab403.utils.ytbot
 import ru.inforion.lab403.common.extensions.BlockingValue
 import ru.inforion.lab403.common.extensions.argparse.parseArguments
 import ru.inforion.lab403.common.logging.logger
+import ru.inforion.lab403.utils.ytbot.checkers.TelegramChecker
+import ru.inforion.lab403.utils.ytbot.checkers.YoutrackChecker
+import ru.inforion.lab403.utils.ytbot.common.TimestampFile
+import ru.inforion.lab403.utils.ytbot.common.YoutrackTelegramBot
 import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
-import ru.inforion.lab403.utils.ytbot.youtrack.Youtrack
 import java.io.File
 import java.security.KeyStore
 import java.security.cert.CertificateFactory
@@ -14,6 +17,7 @@ import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.TrustManagerFactory
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
+import kotlin.time.ExperimentalTime
 
 
 object Application {
@@ -23,15 +27,13 @@ object Application {
         log.info { "Starting daemon... print 'quit' without quotes and enter to stop daemon" }
 
         val stopNotify = BlockingValue<Int>()
-        var currentLastTimestamp = bot.startLastTimestamp
 
         if (!options.dontStartServices)
             bot.createCommandServices()
 
         val worker = thread {
             while (stopNotify.poll(options.daemon * 1000L) == null) {
-                bot.execute(options, currentLastTimestamp)
-                currentLastTimestamp = bot.loadCurrentLastTimestamp()
+                bot.execute(options)
             }
         }
 
@@ -117,24 +119,21 @@ object Application {
 
         log.info { "$appConfig" }
 
-        appConfig.createTimestampDirectories()
+        val timestampFile = TimestampFile(appConfig.timestampFilePath).also {
+            log.config { "Validating timestamp file: '${appConfig.timestampFilePath}'" }
+            it.validateTimestampFile(appConfig.projects, options.timestamp)
+        }
 
-        val lastTimestamp = options.timestamp ?: appConfig.loadTimestamp()
-
-        log.info { "Checking ${appConfig.timestampFilePath} to writing..." }
-        appConfig
-            .runCatching { saveTimestamp(lastTimestamp) }
-            .onFailure {
-                log.severe { "File ${appConfig.timestampFilePath} can't be written" }
-                exitProcess(-1)
-            }
-
-        val bot = YoutrackTelegramBot(lastTimestamp, appConfig)
+        val bot = YoutrackTelegramBot(appConfig, timestampFile)
 
         with(options) {
-            val datetime = Youtrack.makeTimedate(lastTimestamp)
-            log.info { "Starting last timestamp=$lastTimestamp [$datetime] send=${!dontSendMessage} services=${!dontStartServices}" }
-            if (daemon > 0) daemonize(bot, options) else bot.execute(options, lastTimestamp)
+            log.info { "Starting bot with options: send2Telegram=${!dontSendMessage} use services=${!dontStartServices}" }
+            if (daemon > 0) {
+                // here we don't use options.timestamp because it redefined in timestamp file
+                daemonize(bot, options)
+            } else {
+                bot.execute(options)
+            }
         }
     }
 }

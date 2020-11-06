@@ -2,25 +2,17 @@ package ru.inforion.lab403.utils.ytbot.youtrack
 
 import com.google.gson.internal.LinkedTreeMap
 import ru.inforion.lab403.common.extensions.emptyString
-import ru.inforion.lab403.common.extensions.stretch
 import ru.inforion.lab403.common.logging.logger
 import ru.inforion.lab403.utils.ytbot.*
+import ru.inforion.lab403.utils.ytbot.common.TimestampFile
 import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.*
 import java.text.SimpleDateFormat
 import java.util.*
 
-class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appConfig: ApplicationConfig) {
+class Processor(val youtrack: Youtrack, val appConfig: ApplicationConfig, val timestampFile: TimestampFile) {
     companion object {
         val log = logger()
-
-        private fun crop(string: String, size: Int) =
-            if (string.length <= size) string else "${string.stretch(size)}..."
-
-        private fun escapeMarkdown(string: String) = string
-            .replace("_", "\\_")
-            .replace("*", "\\*")
-            .replace("[", "\\[")  // escape ] not required
     }
 
     private fun processAddedRemoved(activity: Activity, block: (ArrayList<LinkedTreeMap<String, String>>) -> String?): String {
@@ -31,7 +23,8 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
 
         if (added.isNotEmpty()) {
             val result = block(added)
-            return if (appConfig.omitEmptyFields && result == null) emptyString else "Added $result"
+            // don't append 'Added' it confusing
+            return if (appConfig.omitEmptyFields && result == null) emptyString else "$result"
         }
 
         log.finer { activity.removed.toString() }
@@ -57,9 +50,9 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
             }
             // Add hash tag to specific fields
             in appConfig.taggedCustomFields -> {
-                "#${escapeMarkdown(data).removeChars(' ', '-', '.')}"
+                "#${data.escapeMarkdown().removeChars(' ', '-', '.')}"
             }
-            else -> escapeMarkdown(data)
+            else -> data.escapeMarkdown()
         }
     }
 
@@ -88,18 +81,16 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         log.severe { "Can't parse field '$presentation' with '$value' -> $it" }
     }.getOrElse { "$presentation: $value" }
 
-    private fun processInternalDescription(description: String?) =
-        if (description != null) escapeMarkdown(crop(description, appConfig.descriptionMaxChars)) else emptyString
+    private fun processInternalDescription(text: String?, issue: Issue) =
+        text?.removeMarkdownCode()?.crop(appConfig.descriptionMaxChars)?.escapeMarkdown() ?: emptyString
 
     private fun processIssueCreatedActivity(project: Project, issue: Issue, activity: Activity): String {
         val stringFields = issue.fields
             .filter { it.name !in appConfig.userCustomFields }
             .mapNotNull { processInternalCustomField(it.name, it.value) }
             .joinToString("\n ")
-        val vDesc = processInternalDescription(issue.description)
-        val vvDesc = if (vDesc.isNotBlank()) "\n$vDesc" else ""
-        val summary = escapeMarkdown(issue.summary)
-        return "$summary$vvDesc\n $stringFields"
+        val desc = processInternalDescription(issue.description, issue)
+        return "$desc\n $stringFields"
     }
 
     private fun processLinkActivity(project: Project, issue: Issue, activity: Activity) =
@@ -113,7 +104,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
 
     private fun processCommentActivity(project: Project, issue: Issue, activity: Activity) =
         processAddedRemoved(activity) {
-            var text = escapeMarkdown(it[0]["text"]!!)
+            var text = it[0]["text"]!!.escapeMarkdown()
             if (appConfig.users != null) {
                 appConfig.users.keys.forEach { username ->
                     val name = "@$username"
@@ -123,14 +114,14 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
                     }
                 }
             }
-            text
+            text.removeSuffix("\n")
         }
 
     private fun processVcsChangesActivity(project: Project, issue: Issue, activity: Activity): String {
         @Suppress("UNCHECKED_CAST")
         val added = activity.added as ArrayList<LinkedTreeMap<String, String>>
 
-        val text = escapeMarkdown(added[0]["text"]!!.trim())
+        val text = added[0]["text"]!!.trim().escapeMarkdown()
         val urls = added[0]["urls"]
 
         val cropText = if (appConfig.commitFirstLineOnly) text.lines().first() else text
@@ -142,9 +133,8 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
 
     private fun processIssueResolved(project: Project, issue: Issue, activity: Activity) = "#${activity.targetMember}"
 
-    private fun processDescription(project: Project, issue: Issue, activity: Activity): String {
-        return processInternalDescription(activity.added as String?)
-    }
+    private fun processDescription(project: Project, issue: Issue, activity: Activity) =
+        processInternalDescription(activity.added as String?, issue)
 
     private fun processAttachments(project: Project, issue: Issue, activity: Activity) =
         processAddedRemoved(activity) {
@@ -189,16 +179,6 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         else -> this::processUnknownActivity
     }
 
-    private fun updateTimestamp(activityTimestamp: Long) {
-        if (appConfig.loadTimestamp() < activityTimestamp) {
-            log.info {
-                val date = Youtrack.makeTimedate(activityTimestamp)
-                "Updating timestamp = $activityTimestamp [$date]"
-            }
-            appConfig.saveTimestamp(activityTimestamp)
-        }
-    }
-
     private val sdfCoarse = SimpleDateFormat("dd.MM.YYYY")
     private val sdfFine = SimpleDateFormat("HH:mm:ss")
 
@@ -206,7 +186,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         val dateString = sdfCoarse.format(date)
         val tagId = youtrack.tagId(issue.idReadable)
         val tagAuthor = youtrack.tagUsername("authored by", author.login, author.ringId, appConfig.users)
-        val summary = escapeMarkdown(crop(issue.summary, appConfig.descriptionMaxChars))
+        val summary = issue.summary.crop(appConfig.descriptionMaxChars).escapeMarkdown()
 
         append("$dateString $tagId $summary $tagAuthor")
 
@@ -217,15 +197,17 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
             .forEach { append("\n- $it") }
     }
 
+    data class ActivityProcessResult(val data: String, val timestamp: Long)
+
     private fun processActivitiesByCategory(
         issue: Issue,
         project: Project,
         category: Category,
         activities: Collection<Activity>
-    ): String? {
+    ): ActivityProcessResult {
         val processor = getProcessorBy(category)
 
-        log.finer { "Processor: $processor" }
+        log.finer { "${processor.name.substringAfterLast(".")} -> activities: ${activities.map { it.id to it.timestamp }}" }
 
         var timestamp: Long = 0
 
@@ -252,16 +234,11 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
             }.maxOrNull() ?: 0
         }
 
-        updateTimestamp(timestamp)
-
-        return if (appConfig.isCategoryActive(category.id)) result else null
+        return ActivityProcessResult(result, timestamp)
     }
 
-    private fun processIssue(issue: Issue, project: Project, block: (String) -> Unit) {
-        log.info {
-            val datetime = Youtrack.makeTimedate(issue.updated)
-            "Request issue activities: ${issue.id} ${issue.updated} [$datetime] $ ${issue.idReadable}"
-        }
+    private fun processIssue(issue: Issue, project: Project, action: ProcessActivityData) {
+        log.finest { "Request issue activities: ${issue.id} ${issue.updated} [${issue.updated.asDatetime}] $ ${issue.idReadable}" }
 
         val activitiesPage = youtrack.activitiesPage(
             issue,
@@ -319,12 +296,12 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
             enumValuesCollection()  // filtered in lambda due to timestamp update required
         )
 
+        // reload timestamp if we update it in action()
+        val lastUpdateTimestamp = timestampFile.loadTimestamp(project.name)
+
         val allIssueActivities = activitiesPage.activities.filter { it.timestamp > lastUpdateTimestamp }
 
-        log.info {
-            val datetime = Youtrack.makeTimedate(issue.updated)
-            "Processing issue activities: ${issue.id} ${issue.updated} [$datetime] ${issue.idReadable} count=${allIssueActivities.size}"
-        }
+        log.info { "Processing issue activities: ${issue.id} ${issue.updated} [${issue.updated.asDatetime}] ${issue.idReadable} count=${allIssueActivities.size}" }
 
         val minutesGroupInterval = appConfig.minutesGroupInterval
         val timeGroupInterval = 60000 * minutesGroupInterval
@@ -337,22 +314,29 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
                     .groupBy { Date(it.timestamp / timeGroupInterval * timeGroupInterval) }
                     .forEach { (date, dateActivities) ->
                         val header = processIssueHeader(issue, date, author)
-                        val body = dateActivities
+                        val processed = dateActivities
                             .groupBy { it.category }
+                            .filter { (category, _) -> appConfig.isCategoryActive(category.id) }
                             .mapNotNull { (category, activities) ->
                                 processActivitiesByCategory(issue, project, category, activities)
-                            }.joinToString("")
+                            }
 
-                        if (body.isNotBlank())
-                            block("$header$body")
+                        val body = processed.joinToString("") { it.data }
+                        val timestamp = processed.maxOfOrNull { it.timestamp }
+
+                        if (body.isNotBlank()) {
+                            checkNotNull(timestamp) { "Something totally wrong: timestamp is null but body is not blank:\n$body" }
+                            val message = "$header$body"
+                            action(message, issue, timestamp)
+                        }
                     }
             }
     }
 
-    fun processProject(project: Project, block: (String) -> Unit) {
-        val start = Youtrack.makeTimedate(lastUpdateTimestamp)
+    fun processProject(project: Project, lastUpdateTimestamp: Long, action: ProcessActivityData) {
+        assert(lastUpdateTimestamp >= 0)
 
-        log.finer { "Processing project: ${project.id} ${project.name} ${project.shortName} from $start" }
+        log.finer { "Processing project: ${project.id} ${project.name} ${project.shortName} from ${lastUpdateTimestamp.asDatetime}" }
 
         val issues = youtrack.issues(
             project,
@@ -364,7 +348,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
                 Issue::description,
                 Issue::fields.with("name", "value(name,login,ringId)")
             ),
-            query = "updated: $start .. *"  // star is open range
+            query = "updated: ${lastUpdateTimestamp.asDatetime} .. *"  // star is open range
         )
 
         val filteredIssues = if (appConfig.filterIssues == null) issues else {
@@ -372,12 +356,10 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
             issues.filter { it.idReadable in appConfig.filterIssues }
         }
 
+        log.finest { "Filtered issues: ${filteredIssues.map { it.id to it.updated }}" }
+
         filteredIssues
             .filter { it.updated > lastUpdateTimestamp }  // may already be processed due to milliseconds
-            .forEach { processIssue(it, project, block) }
-    }
-
-    init {
-        assert(lastUpdateTimestamp >= 0)
+            .forEach { processIssue(it, project, action) }
     }
 }

@@ -1,4 +1,4 @@
-package ru.inforion.lab403.utils.ytbot
+package ru.inforion.lab403.utils.ytbot.checkers
 
 import com.pengrad.telegrambot.UpdatesListener
 import com.pengrad.telegrambot.model.request.ParseMode
