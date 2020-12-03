@@ -188,6 +188,8 @@ class Processor(val youtrack: Youtrack, val appConfig: ApplicationConfig, val ti
         val tagAuthor = youtrack.tagUsername("authored by", author.login, author.ringId, appConfig.users)
         val summary = issue.summary.crop(appConfig.descriptionMaxChars).escapeMarkdown()
 
+        log.finer { "Processing issue header: ${issue.id} [${issue.updated}] author = ${author.id}" }
+
         append("$dateString $tagId $summary $tagAuthor")
 
         // Add all user fields
@@ -205,9 +207,18 @@ class Processor(val youtrack: Youtrack, val appConfig: ApplicationConfig, val ti
         category: Category,
         activities: Collection<Activity>
     ): ActivityProcessResult {
+        val isActive = appConfig.isCategoryActive(category.id)
+
+        // do not process it just get max timestamp
+        if (!isActive) {
+            val timestamp = activities.maxOfOrNull { it.timestamp } ?: 0
+            log.fine { "Category '${category.id}' isn't active but has unprocessed messages in '${project.name}', just get max timestamp = $timestamp" }
+            return ActivityProcessResult(emptyString, timestamp)
+        }
+
         val processor = getProcessorBy(category)
 
-        log.finer { "${processor.name.substringAfterLast(".")} -> activities: ${activities.map { it.id to it.timestamp }}" }
+        log.finer { "Process activities: ${processor.name.substringAfterLast(".")} -> activities: ${activities.map { it.id to it.timestamp }}" }
 
         var timestamp: Long = 0
 
@@ -316,18 +327,27 @@ class Processor(val youtrack: Youtrack, val appConfig: ApplicationConfig, val ti
                         val header = processIssueHeader(issue, date, author)
                         val processed = dateActivities
                             .groupBy { it.category }
-                            .filter { (category, _) -> appConfig.isCategoryActive(category.id) }
                             .mapNotNull { (category, activities) ->
+                                // we should process here all categories to lookup last changed timestamp
                                 processActivitiesByCategory(issue, project, category, activities)
                             }
 
+                        log.finest { "Processed ${processed.size} activities" }
+
                         val body = processed.joinToString("") { it.data }
                         val timestamp = processed.maxOfOrNull { it.timestamp }
+
+                        log.finest { "Max timestamp = $timestamp body size = ${body.length}" }
 
                         if (body.isNotBlank()) {
                             checkNotNull(timestamp) { "Something totally wrong: timestamp is null but body is not blank:\n$body" }
                             val message = "$header$body"
                             action(message, issue, timestamp)
+                        } else if (timestamp != null) {
+                            log.fine { "Inactive categories found so update message timestamp for project: ${project.name}" }
+                            // if we didn't get any message but timestamp not null (so we have inactive categories)
+                            // update timestamp file to filter out inactive categories messages next times
+                            timestampFile.saveTimestamp(project.name, timestamp)
                         }
                     }
             }

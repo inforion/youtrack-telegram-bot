@@ -10,7 +10,6 @@ import okhttp3.OkHttpClient
 import ru.inforion.lab403.common.logging.logger
 import ru.inforion.lab403.utils.ytbot.config.ProxyConfig
 import ru.inforion.lab403.utils.ytbot.config.DnsConfig
-import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 
 
@@ -26,7 +25,7 @@ class TelegramProxy constructor(
         private const val TELEGRAM_API_DOMAIN = "api.telegram.org"
 
         private fun DnsConfig.resolve(hostname: String) = DomainNameResolver(ip, port).query(hostname).also {
-            log.fine { "Resolved ${it.joinToString()} for $hostname" }
+            log.severe { "Resolved ${it.joinToString()} for $hostname" }
         }
 
         private fun createTelegramBot(token: String, proxy: ProxyConfig?, dns: DnsConfig?): TelegramBot {
