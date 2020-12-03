@@ -1,7 +1,10 @@
+@file:Suppress("EmptyRange")
+
 package ru.inforion.lab403.utils.ytbot
 
 import ru.inforion.lab403.common.extensions.*
 import ru.inforion.lab403.utils.ytbot.youtrack.CategoryId
+import java.net.InetAddress
 import java.net.URI
 import java.text.SimpleDateFormat
 import java.util.*
@@ -87,7 +90,9 @@ fun String.removeChars(vararg chars: Char, ignoreCase: Boolean = false) = chars.
 fun String.removeChars(chars: String, ignoreCase: Boolean = false)
         = removeChars(*chars.toCharArray(), ignoreCase = ignoreCase)
 
-@Suppress("EmptyRange")
+inline val Int.asInetAddress get() = InetAddress.getByAddress(byteArrayOf(
+    this[31..24].asByte, this[23..16].asByte, this[15..8].asByte, this[7..0].asByte))
+
 inline val Int.asIPAddress get() = "${this[31..24]}.${this[23..16]}.${this[15..8]}.${this[7..0]}"
 
 inline val Long.asIPAddress get() = asInt.asIPAddress

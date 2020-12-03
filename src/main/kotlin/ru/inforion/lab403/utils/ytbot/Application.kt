@@ -2,7 +2,11 @@ package ru.inforion.lab403.utils.ytbot
 
 import ru.inforion.lab403.common.extensions.BlockingValue
 import ru.inforion.lab403.common.extensions.argparse.parseArguments
+import ru.inforion.lab403.common.extensions.first
+import ru.inforion.lab403.common.extensions.loggerConfigure
+import ru.inforion.lab403.common.logging.Levels
 import ru.inforion.lab403.common.logging.logger
+import ru.inforion.lab403.common.logging.logger.Logger
 import ru.inforion.lab403.utils.ytbot.checkers.TelegramChecker
 import ru.inforion.lab403.utils.ytbot.checkers.YoutrackChecker
 import ru.inforion.lab403.utils.ytbot.common.TimestampFile
@@ -17,7 +21,6 @@ import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.TrustManagerFactory
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
-import kotlin.time.ExperimentalTime
 
 
 object Application {
@@ -79,7 +82,9 @@ object Application {
     fun main(args: Array<String>) {
         val options = args.parseArguments<Options>()
 
-        log.info { options.namespace }
+        log.info { options }
+
+        options.loggingLevel?.loggerConfigure()
 
         if (options.certificate != null) {
             log.info { "Setting up trusted certificate: '${options.certificate}'" }

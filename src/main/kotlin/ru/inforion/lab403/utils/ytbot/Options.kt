@@ -1,9 +1,7 @@
 package ru.inforion.lab403.utils.ytbot
 
-import ru.inforion.lab403.common.extensions.argparse.ApplicationOptions
-import ru.inforion.lab403.common.extensions.argparse.file
-import ru.inforion.lab403.common.extensions.argparse.flag
-import ru.inforion.lab403.common.extensions.argparse.variable
+import ru.inforion.lab403.common.extensions.argparse.*
+import ru.inforion.lab403.common.logging.Levels
 import java.io.File
 
 class Options : ApplicationOptions(
@@ -39,4 +37,11 @@ class Options : ApplicationOptions(
         "-ytc", "--check-youtrack",
         "Get project info from Youtrack. Format [projectName]"
     )
+
+    val loggingLevel: String? by variable(
+        "-ll",
+        "-logging-level",
+        "Set messages minimum logging level for specified loggers in format logger0=LEVEL,logger1=LEVEL\n" +
+                "Or for all loggers if no '=' was found in value just logger level, i.e. FINE\n" +
+                "Available levels: ${Levels.values().joinToString()}\n")
 }

@@ -6,7 +6,7 @@ plugins {
 applicationName = "youtrack-telegram-bot"
 archivesBaseName = "youtrack-telegram-bot"
 group = 'ru.inforion.lab403.utils'
-version = '0.2.0'
+version = '0.2.1'
 mainClassName = "ru.inforion.lab403.utils.ytbot.Application"
 description = "Youtrack Telegram bot"
 
@@ -23,16 +23,17 @@ dependencies {
     implementation group: 'net.sourceforge.argparse4j', name: 'argparse4j', version: '0.8.1'
     implementation group: 'com.fasterxml.jackson.module', name: 'jackson-module-kotlin', version: '2.11.3'
 
-    implementation group: 'org.simplejavamail', name: 'simple-java-mail', version: '4.1.1'
+    // for SOCKS5 SSL
+    implementation group: 'org.simplejavamail', name: 'simple-java-mail', version: '5.1.1'
     implementation group: 'com.github.kittinunf.fuel', name: 'fuel', version: '2.3.0'
 
     implementation group: 'org.reflections', name: 'reflections', version: '0.9.12'
 
     implementation group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib'
-    implementation group: 'com.github.inforion', name: 'kotlin-logging', version: '0.2.2'
+    implementation group: 'com.github.inforion', name: 'kotlin-logging', version: '0.2.3'
     implementation group: 'com.github.inforion', name: 'kotlin-extensions', version: '0.3.4'
 
-    implementation group: 'com.github.pengrad', name: 'java-telegram-bot-api', version: '4.9.0'
+    implementation group: 'com.github.pengrad', name: 'java-telegram-bot-api', version: '5.0.1'
 
     testCompile group: 'org.slf4j', name: 'slf4j-log4j12', version: '1.7.26'
 }

@@ -340,4 +340,9 @@ class Youtrack(val baseUrl: String, private val permToken: String) {
 
         httpGet(API.rest, "issue", parameters)
     }
+
+    /**
+     * Gets Youtrack current version
+     */
+    fun version() = httpGet(API.rest, "workflow/version", emptyList())
 }

@@ -6,16 +6,16 @@
       "chatId": -1  // chat id for this bot
     }
   ],
+  "dns": {  // optional (resolve Telegram IP using specified DNS) WARNING: Certificate won't check in this case!
+    "ip": "8.8.8.8",
+    "port": 53
+  },
   "proxy": {  // optional
     "host":  "8.8.8.8",
     "port": 1111,
     "auth": {  // optional
       "username": "user",
       "password": "pass"
-    },
-    "dns": {  // optional (resolve Telegram IP using specified DNS) WARNING: Certificate won't check in this case!
-      "ip": "8.8.8.8",
-      "port": 53
     }
   },
   "youtrack": {

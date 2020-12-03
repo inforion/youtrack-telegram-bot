@@ -27,7 +27,7 @@ class YoutrackTelegramBot constructor(
     private val bots = mutableMapOf<String, TelegramProxy>()
 
     private fun createOrGetTelegramProxy(token: String) =
-        bots.getOrPut(token) { TelegramProxy(token, appConfig.proxy, appConfig.telegramMinimumMessageDelay) }
+        bots.getOrPut(token) { TelegramProxy(token, appConfig.proxy, appConfig.dns, appConfig.telegramMinimumMessageDelay) }
 
     private val youtrack by lazy { Youtrack(appConfig.youtrack.baseUrl, appConfig.youtrack.token) }
 
@@ -331,7 +331,10 @@ class YoutrackTelegramBot constructor(
                 sendTextMessage(bot, chatId, "You are $fullname $username user ID: $userId $language $isBot")
             }
 
-            else -> sendTextMessage(bot, chatId, "You send me command $botCmd ... ${responses.choice()}")
+            else -> {
+                log.severe { "Unknown command: $botCmd" }
+//                sendTextMessage(bot, chatId, "You send me command $botCmd ... ${responses.choice()}")
+            }
         }
     }
 

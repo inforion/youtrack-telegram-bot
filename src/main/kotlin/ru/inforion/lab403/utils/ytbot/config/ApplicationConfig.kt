@@ -4,12 +4,12 @@ import ru.inforion.lab403.common.extensions.parseJson
 import ru.inforion.lab403.common.logging.logger
 import ru.inforion.lab403.utils.ytbot.youtrack.CategoryId
 import java.io.File
-import kotlin.time.Duration
 import kotlin.time.ExperimentalTime
 
 
-data class ApplicationConfig @ExperimentalTime constructor(
+data class ApplicationConfig constructor(
     val proxy: ProxyConfig?,
+    val dns: DnsConfig?,
     val youtrack: YoutrackConfig,
     val projects: List<ProjectConfig>,
     val minutesGroupInterval: Int,

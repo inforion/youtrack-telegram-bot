@@ -16,15 +16,18 @@ class YoutrackChecker(val config: ApplicationConfig) {
     fun check(project: String) {
         val youtrack = Youtrack(config.youtrack.baseUrl, config.youtrack.token)
 
+        val version = youtrack.version()
+        log.info { "Version = $version" }
+
         val projects = youtrack.projects(fields(Project::id, Project::name, Project::shortName))
 
-        println("======== Found projects ======== ")
+        log.info { "======== Found projects ======== " }
         projects.forEach { println("${it.id} ${it.shortName} aka ${it.name}") }
 
         val prj = projects.first { it.name == project }
         val issues = youtrack.issues(prj, fields(Issue::idReadable, Issue::id, Issue::summary))
 
-        println("======== Issues of project $project ========")
+        log.info { "======== Issues of project $project ========" }
         issues.forEach { println("${it.id} ${it.idReadable} ${it.summary}") }
     }
 }
