@@ -6,10 +6,12 @@
       "chatId": -1  // chat id for this bot
     }
   ],
+
   "dns": {  // optional (resolve Telegram IP using specified DNS) WARNING: Certificate won't check in this case!
     "ip": "8.8.8.8",
     "port": 53
   },
+
   "proxy": {  // optional
     "host":  "8.8.8.8",
     "port": 1111,
@@ -18,10 +20,12 @@
       "password": "pass"
     }
   },
+
   "youtrack": {
     "baseUrl": "https://server.ru/youtrack",
     "token": "token" // bearer auth only
   },
+
   // or null for all
   "activityCategories": [
     "SummaryCategory",
@@ -29,25 +33,42 @@
     "CustomFieldCategory",
     "IssueCreatedCategory",
     "AttachmentsCategory",
-    //    "IssueResolvedCategory",
+//    "IssueResolvedCategory",
     "CommentsCategory",
     "VcsChangeCategory",
-    "LinksCategory",
+//    "LinksCategory",
     "SprintCategory",
     "DescriptionCategory",
     "AttachmentRenameCategory",
     "ProjectCategory",
     "TagsCategory"
   ],
+
   // datetime format for YouTrack
-  // version 2020.5 and above most likely use yyyy-MM-dd'_'HH:mm:ss
+  // WARNING: version 2020.5 and above most likely use yyyy-MM-dd'_'HH:mm:ss
   "datetimeFormat": "yyyy-MM-dd'T'HH:mm:ss",
-  "minutesGroupInterval": 5,
-  "timestampFilePath": "temp/timestamp.txt",  // folder must exists
+
+  "telegramSendRetriesCount": 2,  // if message send was unsuccessful how many count try to resend
+  "telegramSendRetriesTimeout": 1000,  // delay between in ms telegram message sent during retries
+  "telegramMinimumMessageDelay": 250,  // minimum delay between any telegram messages
+
+  "minutesGroupInterval": 5, // group activities within this time interval
+
+  "timestampFilePath": "temp/timestamp.txt",
+
+  "omitEmptyFields": true,  // show or not in telegram message empty fields
+  "showActivityAuthor": true,  // show or not in telegram message author who made change (activity)
   "descriptionMaxChars": 500,
+
+  "commitFirstLineOnly": true, // show in telegram only first line of commit message
+
+  "messageWaitInterval": 10, // in sec, wait for new activities to aggregate it before message will be sent to telegram
+
   "taggedCustomFields": ["Priority", "State"],  // for this field hash tag added before value
   "userCustomFields": ["Assignee", "Supervisor"],
-  "filterIssues": [ "YT-100" ],  // optional (parse just specified issues, debug purpose)
+
+//  "filterIssues": [ "YT-100" ],  // optional (parse just specified issues, debug purpose)
+
   "users": { // mapping from Youtrack user to Telegram user
     "n.romanoff": { "id": null, "name": "NatashaRomanoff" },
     "b.banner": { "id": 111555, "name": "Hulk" },
