@@ -48,7 +48,7 @@ class Cache(
     fun sendReadyMessages(dontSendMessage: Boolean) {
         cache.filterValues {
             it.ready(appConfig.messageWaitInterval * 1000L).apply {
-                log.severe { "Message ${it.data.take(20)}... is ready to send timestamp = ${it.timestamp} ready = $this" }
+                log.trace { "Message ${it.data.take(20)}... is ready to send timestamp = ${it.timestamp} ready = $this" }
             }
         }.forEach { (project, _) ->
             sendMessage(project, dontSendMessage)

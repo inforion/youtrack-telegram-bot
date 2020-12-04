@@ -25,7 +25,7 @@ class TelegramProxy constructor(
         private const val TELEGRAM_API_DOMAIN = "api.telegram.org"
 
         private fun DnsConfig.resolve(hostname: String) = DomainNameResolver(ip, port).query(hostname).also {
-            log.severe { "Resolved ${it.joinToString()} for $hostname" }
+            log.config { "Resolved ${it.joinToString()} for $hostname" }
         }
 
         private fun createTelegramBot(token: String, proxy: ProxyConfig?, dns: DnsConfig?): TelegramBot {
