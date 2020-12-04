@@ -69,6 +69,7 @@ After Java update basically you should stop your youtrack-telegram-bot, download
 New version of config template placed in `master` branch as a previous one. All new options commented with some description. One of the most important is **messageWaitInterval**. This option makes possible to aggregate action that user make for one issue. For example, when user set issue is fixed and even if bot in a daemon mode with 1 second update interval bot is just register that Youtrack have some changes but not send it to Telegram. Bot waits **messageWaitInterval** for other user actions to aggregate (group) them in one Telegram message. When timeout elapsed bot send one message with all actions. This option makes bot less "spamy" and more informative.
 
 NOTE: If other issue also have edits bot send all issue immediately. This is not a good behavior but at a current format of timestamp file bot has no other option. This will be fixed in future versions.
+
 ## Docker
 
 Build container:
