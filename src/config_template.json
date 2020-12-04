@@ -49,8 +49,8 @@
   "datetimeFormat": "yyyy-MM-dd'T'HH:mm:ss",
 
   "telegramSendRetriesCount": 2,  // if message send was unsuccessful how many count try to resend
-  "telegramSendRetriesTimeout": 1000,  // delay between in ms telegram message sent during retries
-  "telegramMinimumMessageDelay": 250,  // minimum delay between any telegram messages
+  "telegramSendRetriesTimeout": 1000,  // in ms, delay between telegram message sent during retries
+  "telegramMinimumMessageDelay": 250,  // in ms, minimum delay between any telegram messages
 
   "minutesGroupInterval": 5, // group activities within this time interval
 
