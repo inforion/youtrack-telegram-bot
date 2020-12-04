@@ -8,6 +8,8 @@ import ru.inforion.lab403.common.extensions.variable
 import ru.inforion.lab403.common.logging.logger
 import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
 import ru.inforion.lab403.utils.ytbot.youtrack.Youtrack
+import java.text.SimpleDateFormat
+import java.util.*
 import java.util.logging.Level
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
@@ -89,6 +91,10 @@ class Application {
 
             val appConfig = ApplicationConfig.load(configPath)
 
+            val timedateFormat = SimpleDateFormat(appConfig.datetimeFormat).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+
             var inCheckMode = false
 
             if (checkTelegram != null) {
@@ -129,10 +135,10 @@ class Application {
                     exitProcess(-1)
                 }
 
-            val bot = YoutrackTelegramBot(startingLastTimestamp, appConfig)
+            val bot = YoutrackTelegramBot(startingLastTimestamp, appConfig, timedateFormat)
 
             log.info {
-                val datetime = Youtrack.makeTimedate(startingLastTimestamp)
+                val datetime = timedateFormat.format(startingLastTimestamp)
                 "Starting last timestamp=$startingLastTimestamp [$datetime] send=$tgSendMessages services=$tgStartServices"
             }
             if (daemon > 0) {

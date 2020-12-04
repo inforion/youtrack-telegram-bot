@@ -11,6 +11,7 @@ data class ApplicationConfig(
     val proxy: ProxyConfig?,
     val youtrack: YoutrackConfig,
     val projects: List<ProjectConfig>,
+    val datetimeFormat: String,
     val minutesGroupInterval: Int,
     val timestampFilePath: String,
     val descriptionMaxChars: Int,

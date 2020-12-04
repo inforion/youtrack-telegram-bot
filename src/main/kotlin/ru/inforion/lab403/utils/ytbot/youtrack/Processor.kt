@@ -8,12 +8,13 @@ import ru.inforion.lab403.utils.ytbot.*
 import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.*
 import java.lang.RuntimeException
+import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.logging.Level
 import kotlin.collections.ArrayList
 
-class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appConfig: ApplicationConfig) {
+class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appConfig: ApplicationConfig, val timedateFormat: DateFormat) {
     companion object {
         val log = logger(Level.FINE)
 
@@ -172,7 +173,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
     private fun updateTimestamp(activityTimestamp: Long) {
         if (appConfig.loadTimestamp() < activityTimestamp) {
             log.info {
-                val date = Youtrack.makeTimedate(activityTimestamp)
+                val date = timedateFormat.format(activityTimestamp)
                 "Updating timestamp = $activityTimestamp [$date]"
             }
             appConfig.saveTimestamp(activityTimestamp)
@@ -235,7 +236,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
 
     private fun processIssue(issue: Issue, project: Project, block: (String) -> Unit) {
         log.info {
-            val datetime = Youtrack.makeTimedate(issue.updated)
+            val datetime = timedateFormat.format(issue.updated)
             "Request issue activities: ${issue.id} ${issue.updated} [$datetime] $ ${issue.idReadable}"
         }
 
@@ -298,7 +299,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
         val allIssueActivities = activitiesPage.activities.filter { it.timestamp > lastUpdateTimestamp }
 
         log.info {
-            val datetime = Youtrack.makeTimedate(issue.updated)
+            val datetime = timedateFormat.format(issue.updated)
             "Processing issue activities: ${issue.id} ${issue.updated} [$datetime] ${issue.idReadable} count=${allIssueActivities.size}"
         }
 
@@ -330,7 +331,7 @@ class Processor(val youtrack: Youtrack, val lastUpdateTimestamp: Long, val appCo
     }
 
     fun processProject(project: Project, block: (String) -> Unit) {
-        val start = Youtrack.makeTimedate(lastUpdateTimestamp)
+        val start = timedateFormat.format(lastUpdateTimestamp)
 
         log.finer { "Processing project: ${project.id} ${project.name} ${project.shortName} from $start" }
 

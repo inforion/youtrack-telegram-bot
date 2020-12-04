@@ -14,11 +14,13 @@ import ru.inforion.lab403.utils.ytbot.youtrack.Youtrack
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Issue
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Project
 import java.io.DataInputStream
+import java.text.DateFormat
 import java.util.logging.Level
 
 class YoutrackTelegramBot(
     val startLastTimestamp: Long,
-    private val appConfig: ApplicationConfig
+    private val appConfig: ApplicationConfig,
+    private val timedateFormat: DateFormat
 ) {
     companion object {
         private val log = logger(Level.FINE)
@@ -38,7 +40,7 @@ class YoutrackTelegramBot(
 
     fun execute(tgSendMessages: Boolean, lastTimestamp: Long = startLastTimestamp) {
         log.finer {
-            val date = Youtrack.makeTimedate(lastTimestamp)
+            val date = timedateFormat.format(lastTimestamp)
             "Parsing Youtrack activity timestamp=$lastTimestamp [$date]"
         }
         val projects = youtrack.projects(
@@ -49,7 +51,7 @@ class YoutrackTelegramBot(
             )
         )
 
-        val processor = Processor(youtrack, lastTimestamp, appConfig)
+        val processor = Processor(youtrack, lastTimestamp, appConfig, timedateFormat)
 
         appConfig.projects.map { projectConfig ->
             val bot = createOrGetTelegramProxy(projectConfig)
