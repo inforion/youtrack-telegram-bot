@@ -4,10 +4,10 @@ import ru.inforion.lab403.common.extensions.parseJson
 import ru.inforion.lab403.common.extensions.toFile
 import ru.inforion.lab403.common.extensions.writeJson
 import ru.inforion.lab403.common.logging.logger
-import ru.inforion.lab403.utils.ytbot.asDatetime
 import ru.inforion.lab403.utils.ytbot.config.ProjectConfig
+import java.text.DateFormat
 
-class TimestampFile(private val path: String) {
+class TimestampFile(private val path: String, private val sdf: DateFormat) {
     companion object {
         val log = logger()
     }
@@ -83,7 +83,7 @@ class TimestampFile(private val path: String) {
         load().also {
             val previous = it.getValue(project)
             if (previous < timestamp) {
-                log.info { "Updating '$project' timestamp to $timestamp [${timestamp.asDatetime}]" }
+                log.info { "Updating '$project' timestamp to $timestamp [${sdf.format(timestamp)}]" }
                 it[project] = timestamp
             } else {
                 log.info { "Previous timestamp value for project '$project' is $previous new value is $timestamp -> omit" }

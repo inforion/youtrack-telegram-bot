@@ -3,10 +3,8 @@ package ru.inforion.lab403.utils.ytbot.common
 import com.pengrad.telegrambot.UpdatesListener
 import com.pengrad.telegrambot.model.Update
 import com.pengrad.telegrambot.request.SendMessage
-import ru.inforion.lab403.common.extensions.choice
 import ru.inforion.lab403.common.logging.logger
 import ru.inforion.lab403.utils.ytbot.Options
-import ru.inforion.lab403.utils.ytbot.asDatetime
 import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
 import ru.inforion.lab403.utils.ytbot.fields
 import ru.inforion.lab403.utils.ytbot.telegram.TelegramProxy
@@ -14,11 +12,13 @@ import ru.inforion.lab403.utils.ytbot.youtrack.Processor
 import ru.inforion.lab403.utils.ytbot.youtrack.Youtrack
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Issue
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Project
+import java.text.DateFormat
 
 
 class YoutrackTelegramBot constructor(
     private val appConfig: ApplicationConfig,
-    private val timestampFile: TimestampFile
+    private val timestampFile: TimestampFile,
+    private val sdf: DateFormat
 ) {
     companion object {
         val log = logger()
@@ -44,15 +44,14 @@ class YoutrackTelegramBot constructor(
             )
         )
 
-        val processor = Processor(youtrack, appConfig, timestampFile)
-
+        val processor = Processor(youtrack, appConfig, timestampFile, sdf)
 
         appConfig.projects.map { projectConfig ->
             val project = projects.first { it.name == projectConfig.name }
 
             val lastTimestamp = timestampFile.loadTimestamp(project.name)
 
-            log.finer { "Parsing '${project.name}' activities for last timestamp=$lastTimestamp [${lastTimestamp.asDatetime}]" }
+            log.finer { "Parsing '${project.name}' activities for last timestamp=$lastTimestamp [${sdf.format(lastTimestamp)}]" }
 
             processor.processProject(project, lastTimestamp) { data, issue, timestamp ->
                 val bot = createOrGetTelegramProxy(projectConfig.token)

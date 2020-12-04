@@ -39,6 +39,9 @@
     "ProjectCategory",
     "TagsCategory"
   ],
+  // datetime format for YouTrack
+  // version 2020.5 and above most likely use yyyy-MM-dd'_'HH:mm:ss
+  "datetimeFormat": "yyyy-MM-dd'T'HH:mm:ss",
   "minutesGroupInterval": 5,
   "timestampFilePath": "temp/timestamp.txt",  // folder must exists
   "descriptionMaxChars": 500,

@@ -7,10 +7,16 @@ import ru.inforion.lab403.utils.ytbot.*
 import ru.inforion.lab403.utils.ytbot.common.TimestampFile
 import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.*
+import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.*
 
-class Processor(val youtrack: Youtrack, val appConfig: ApplicationConfig, val timestampFile: TimestampFile) {
+class Processor(
+    private val youtrack: Youtrack,
+    private val appConfig: ApplicationConfig,
+    private val timestampFile: TimestampFile,
+    private val sdf: DateFormat
+) {
     companion object {
         val log = logger()
     }
@@ -249,7 +255,7 @@ class Processor(val youtrack: Youtrack, val appConfig: ApplicationConfig, val ti
     }
 
     private fun processIssue(issue: Issue, project: Project, action: ProcessActivityData) {
-        log.finest { "Request issue activities: ${issue.id} ${issue.updated} [${issue.updated.asDatetime}] $ ${issue.idReadable}" }
+        log.finest { "Request issue activities: ${issue.id} ${issue.updated} [${sdf.format(issue.updated)}] $ ${issue.idReadable}" }
 
         val activitiesPage = youtrack.activitiesPage(
             issue,
@@ -312,7 +318,7 @@ class Processor(val youtrack: Youtrack, val appConfig: ApplicationConfig, val ti
 
         val allIssueActivities = activitiesPage.activities.filter { it.timestamp > lastUpdateTimestamp }
 
-        log.info { "Processing issue activities: ${issue.id} ${issue.updated} [${issue.updated.asDatetime}] ${issue.idReadable} count=${allIssueActivities.size}" }
+        log.info { "Processing issue activities: ${issue.id} ${issue.updated} [${sdf.format(issue.updated)}] ${issue.idReadable} count=${allIssueActivities.size}" }
 
         val minutesGroupInterval = appConfig.minutesGroupInterval
         val timeGroupInterval = 60000 * minutesGroupInterval
@@ -356,7 +362,7 @@ class Processor(val youtrack: Youtrack, val appConfig: ApplicationConfig, val ti
     fun processProject(project: Project, lastUpdateTimestamp: Long, action: ProcessActivityData) {
         assert(lastUpdateTimestamp >= 0)
 
-        log.finer { "Processing project: ${project.id} ${project.name} ${project.shortName} from ${lastUpdateTimestamp.asDatetime}" }
+        log.finer { "Processing project: ${project.id} ${project.name} ${project.shortName} from ${sdf.format(lastUpdateTimestamp)}" }
 
         val issues = youtrack.issues(
             project,
@@ -368,7 +374,7 @@ class Processor(val youtrack: Youtrack, val appConfig: ApplicationConfig, val ti
                 Issue::description,
                 Issue::fields.with("name", "value(name,login,ringId)")
             ),
-            query = "updated: ${lastUpdateTimestamp.asDatetime} .. *"  // star is open range
+            query = "updated: ${sdf.format(lastUpdateTimestamp)} .. *"  // star is open range
         )
 
         val filteredIssues = if (appConfig.filterIssues == null) issues else {

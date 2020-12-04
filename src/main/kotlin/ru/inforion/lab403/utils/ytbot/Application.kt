@@ -15,6 +15,8 @@ import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
 import java.io.File
 import java.security.KeyStore
 import java.security.cert.CertificateFactory
+import java.text.SimpleDateFormat
+import java.util.*
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocketFactory
@@ -94,6 +96,10 @@ object Application {
 
         val appConfig = ApplicationConfig.load(options.config)
 
+        val datetimeFormatter = SimpleDateFormat(appConfig.datetimeFormat).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+
         var inCheckMode = false
 
         options.checkTelegram?.let {
@@ -124,12 +130,12 @@ object Application {
 
         log.info { "$appConfig" }
 
-        val timestampFile = TimestampFile(appConfig.timestampFilePath).also {
+        val timestampFile = TimestampFile(appConfig.timestampFilePath, datetimeFormatter).also {
             log.config { "Validating timestamp file: '${appConfig.timestampFilePath}'" }
             it.validateTimestampFile(appConfig.projects, options.timestamp)
         }
 
-        val bot = YoutrackTelegramBot(appConfig, timestampFile)
+        val bot = YoutrackTelegramBot(appConfig, timestampFile, datetimeFormatter)
 
         with(options) {
             log.info { "Starting bot with options: send2Telegram=${!dontSendMessage} use services=${!dontStartServices}" }

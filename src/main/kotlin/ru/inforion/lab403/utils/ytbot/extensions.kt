@@ -90,19 +90,12 @@ fun String.removeChars(vararg chars: Char, ignoreCase: Boolean = false) = chars.
 fun String.removeChars(chars: String, ignoreCase: Boolean = false)
         = removeChars(*chars.toCharArray(), ignoreCase = ignoreCase)
 
-inline val Int.asInetAddress get() = InetAddress.getByAddress(byteArrayOf(
+inline val Int.asInetAddress: InetAddress get() = InetAddress.getByAddress(byteArrayOf(
     this[31..24].asByte, this[23..16].asByte, this[15..8].asByte, this[7..0].asByte))
 
 inline val Int.asIPAddress get() = "${this[31..24]}.${this[23..16]}.${this[15..8]}.${this[7..0]}"
 
 inline val Long.asIPAddress get() = asInt.asIPAddress
-
-
-private val timedateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss").apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
-
-val Long.asDatetime get() = timedateFormat.format(this)
 
 fun String.escapeMarkdown() =
     replace("_", "\\_")

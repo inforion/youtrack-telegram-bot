@@ -20,6 +20,7 @@ data class ApplicationConfig constructor(
     val telegramSendRetriesCount: Int,
     val telegramSendRetriesTimeout: Long,
     val taggedCustomFields: List<String>,
+    val datetimeFormat: String,
     val messageWaitInterval: Long,
     val commitFirstLineOnly: Boolean,
     val showActivityAuthor: Boolean,
