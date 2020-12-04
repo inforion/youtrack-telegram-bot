@@ -1,46 +1,41 @@
-package ru.inforion.lab403.utils.ytbot
+package ru.inforion.lab403.utils.ytbot.common
 
 import com.pengrad.telegrambot.UpdatesListener
 import com.pengrad.telegrambot.model.Update
-import com.pengrad.telegrambot.model.request.ParseMode
 import com.pengrad.telegrambot.request.SendMessage
-import ru.inforion.lab403.common.extensions.choice
 import ru.inforion.lab403.common.logging.logger
+import ru.inforion.lab403.utils.ytbot.Options
 import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
-import ru.inforion.lab403.utils.ytbot.config.ProjectConfig
+import ru.inforion.lab403.utils.ytbot.fields
 import ru.inforion.lab403.utils.ytbot.telegram.TelegramProxy
 import ru.inforion.lab403.utils.ytbot.youtrack.Processor
 import ru.inforion.lab403.utils.ytbot.youtrack.Youtrack
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Issue
 import ru.inforion.lab403.utils.ytbot.youtrack.scheme.Project
-import java.io.DataInputStream
-import java.util.logging.Level
+import java.text.DateFormat
 
-class YoutrackTelegramBot(
-    val startLastTimestamp: Long,
-    private val appConfig: ApplicationConfig
+
+class YoutrackTelegramBot constructor(
+    private val appConfig: ApplicationConfig,
+    private val timestampFile: TimestampFile,
+    private val sdf: DateFormat
 ) {
     companion object {
-        private val log = logger(Level.FINE)
+        val log = logger()
     }
 
     private val bots = mutableMapOf<String, TelegramProxy>()
 
-    private fun createOrGetTelegramProxy(config: ProjectConfig) =
-        bots.getOrPut(config.token) { TelegramProxy(config.token, appConfig.proxy) }
-
-    private fun createIfAbsentTelegramProxy(config: ProjectConfig) =
-        bots.putIfAbsent(config.token) { TelegramProxy(config.token, appConfig.proxy) }
+    private fun createOrGetTelegramProxy(token: String) =
+        bots.getOrPut(token) { TelegramProxy(token, appConfig.proxy, appConfig.dns, appConfig.telegramMinimumMessageDelay) }
 
     private val youtrack by lazy { Youtrack(appConfig.youtrack.baseUrl, appConfig.youtrack.token) }
 
-    fun loadCurrentLastTimestamp() = appConfig.loadTimestamp()
+    private val cache = Cache(appConfig, timestampFile)
 
-    fun execute(tgSendMessages: Boolean, lastTimestamp: Long = startLastTimestamp) {
-        log.finer {
-            val date = Youtrack.makeTimedate(lastTimestamp)
-            "Parsing Youtrack activity timestamp=$lastTimestamp [$date]"
-        }
+    private fun aggregationTimeExceeded(larger: Long, lower: Long) = larger - lower >= appConfig.minutesGroupInterval * 60_000L
+
+    fun execute(options: Options) {
         val projects = youtrack.projects(
             fields(
                 Project::id,
@@ -49,24 +44,49 @@ class YoutrackTelegramBot(
             )
         )
 
-        val processor = Processor(youtrack, lastTimestamp, appConfig)
+        val processor = Processor(youtrack, appConfig, timestampFile, sdf)
 
         appConfig.projects.map { projectConfig ->
-            val bot = createOrGetTelegramProxy(projectConfig)
             val project = projects.first { it.name == projectConfig.name }
-            processor.processProject(project) { data ->
-                if (tgSendMessages) {
-                    val message = SendMessage(projectConfig.chatId, data)
-                        .parseMode(ParseMode.Markdown)
-                    log.finest { "Sending chatId = ${projectConfig.chatId} message $message" }
-                    val response = bot.execute(message)
-                    if (response.message() == null) {
-                        log.severe { "Failed to send message to Telegram: $data " }
+
+            val lastTimestamp = timestampFile.loadTimestamp(project.name)
+
+            log.finer { "Parsing '${project.name}' activities for last timestamp=$lastTimestamp [${sdf.format(lastTimestamp)}]" }
+
+            processor.processProject(project, lastTimestamp) { data, issue, timestamp ->
+                val bot = createOrGetTelegramProxy(projectConfig.token)
+                val chat = projectConfig.chatId
+
+                val previous = cache.getMessage(project.name)
+
+                if (previous != null) when {
+                    // we should send previous group because aggregation interval was exceeded and
+                    // new activities will never be aggregated with cached...
+                    aggregationTimeExceeded(timestamp, previous.timestamp)
+                            // we can't aggregate messages from different issue, so send it now
+                            // to decouple message from different issues we need to store last timestamp
+                            // for each issue separately
+                            || previous.issue != issue.id -> {
+
+                        val exceed = aggregationTimeExceeded(timestamp, previous.timestamp)
+
+                        // force send message to telegram
+                        log.severe { "Force '${project.name}': ${timestamp - previous.timestamp}, $exceed, ${previous.issue != issue.id}" }
+
+                        cache.sendMessage(project.name, options.dontSendMessage)
+                        cache.newMessage(bot, project.name, chat, issue.id, data, timestamp)
                     }
+
+                    previous.data != data -> {
+                        cache.replaceMessage(project.name, data, timestamp)
+                    }
+                } else {
+                    cache.newMessage(bot, project.name, chat, issue.id, data, timestamp)
                 }
-                log.fine(data)
             }
         }
+
+        cache.sendReadyMessages(options.dontSendMessage)
     }
 
     private val projects = mutableMapOf<Int, Project>()
@@ -124,8 +144,6 @@ class YoutrackTelegramBot(
     }
 
     private fun setProjectAndIssue(userId: Int, bot: TelegramProxy, chatId: Long, params: String?): String? {
-        val others: String?
-
         val tokens = getCommandTokens(params, 2)
 
         if (tokens.isEmpty()) {
@@ -135,15 +153,13 @@ class YoutrackTelegramBot(
 
         val isFirstTokenIssueID = maybeIssueID(tokens[0])
 
-        if (isFirstTokenIssueID) {
+        val others = if (!isFirstTokenIssueID) params else {
             if (tokens.size < 2) {
                 sendTextMessage(bot, chatId, "Wrong format, use /<cmd> [IssueID] <youtrack_cmd>")
                 return null
             }
             setIssueTo(userId, bot, chatId, tokens[0])
-            others = tokens[1]
-        } else {
-            others = params
+            tokens[1]
         }
 
         if (projects[userId] == null || issues[userId] == null) {
@@ -164,8 +180,9 @@ class YoutrackTelegramBot(
         youtrack
             .runCatching { command(issues[userId]!!.idReadable, command, comment) }
             .onFailure {
-                log.severe { it.stackTraceAsString }
-                sendTextMessage(bot, chatId, "Can't execute command: ${it.message}")
+                log.severe { it.stackTraceToString() }
+                // may lead to vulnerability cus send back bearer
+                // sendTextMessage(bot, chatId, "Can't execute command: ${it.message}")
             }
     }
 
@@ -179,7 +196,7 @@ class YoutrackTelegramBot(
         youtrack
             .runCatching { issue(projects[userId]!!.shortName, summary, description) }
             .onFailure {
-                log.severe { it.stackTraceAsString }
+                log.severe { it.stackTraceToString() }
                 sendTextMessage(bot, chatId, "Can't create issue: ${it.message}")
             }
     }
@@ -256,7 +273,11 @@ class YoutrackTelegramBot(
 
             "/create" -> {
                 if (params == null) {
-                    sendTextMessage(bot, chatId, "Wrong number of parameters, use /create <project> [<summary>] [<description>]")
+                    sendTextMessage(
+                        bot,
+                        chatId,
+                        "Wrong number of parameters, use /create <project> [<summary>] [<description>]"
+                    )
                     return
                 }
 
@@ -271,7 +292,11 @@ class YoutrackTelegramBot(
                 val summaryToken = remains.takeWhile { it != ']' }
 
                 if (summaryToken.isBlank()) {
-                    sendTextMessage(bot, chatId, "Wrong number of parameters, use /create <project> [<summary>] [<description>]")
+                    sendTextMessage(
+                        bot,
+                        chatId,
+                        "Wrong number of parameters, use /create <project> [<summary>] [<description>]"
+                    )
                     return
                 }
 
@@ -280,7 +305,8 @@ class YoutrackTelegramBot(
                 remains = remains.removePrefix(summaryToken).drop(1)
 
                 val descriptionToken = remains.takeWhile { it != ']' }
-                val description = if (descriptionToken.isNotBlank()) descriptionToken.dropWhile { it != '[' }.drop(1) else null
+                val description =
+                    if (descriptionToken.isNotBlank()) descriptionToken.dropWhile { it != '[' }.drop(1) else null
 
                 safeYoutrackCreateIssue(bot, chatId, userId, summary, description)
             }
@@ -304,12 +330,15 @@ class YoutrackTelegramBot(
                 sendTextMessage(bot, chatId, "You are $fullname $username user ID: $userId $language $isBot")
             }
 
-            else -> sendTextMessage(bot, chatId, "You send me command $botCmd ... ${responses.choice()}")
+            else -> {
+                log.severe { "Unknown command: $botCmd" }
+//                sendTextMessage(bot, chatId, "You send me command $botCmd ... ${responses.choice()}")
+            }
         }
     }
 
     private fun failProcessMessage(update: Update?, error: Throwable) {
-        val trace = error.stackTraceAsString
+        val trace = error.stackTraceToString()
         log.severe { "Error occurred when parsing $update: ${error.message}\n$trace" }
     }
 
@@ -317,19 +346,20 @@ class YoutrackTelegramBot(
         // for only unique project names avoid to create duplicates
         appConfig
             .projects
-            .mapNotNull { createIfAbsentTelegramProxy(it) }
+            .map { createOrGetTelegramProxy(it.token) }
+            .distinctBy { it.token }
             .forEach { bot ->
-            log.info { "Starting listener for bot = ${bot.token}" }
-            val listener = UpdatesListener { updates ->
-                updates.forEach { update ->
-                    update
-                        .runCatching { tryProcessMessage(bot, update) }
-                        .onFailure { error -> failProcessMessage(update, error) }
+                log.info { "Starting listener for bot = ${bot.token}" }
+                val listener = UpdatesListener { updates ->
+                    updates.forEach { update ->
+                        update
+                            .runCatching { tryProcessMessage(bot, update) }
+                            .onFailure { error -> failProcessMessage(update, error) }
+                    }
+                    log.finest { "Confirm all" }
+                    UpdatesListener.CONFIRMED_UPDATES_ALL
                 }
-                log.finest { "Confirm all" }
-                UpdatesListener.CONFIRMED_UPDATES_ALL
+                bot.setUpdatesListener(listener)
             }
-            bot.setUpdatesListener(listener)
-        }
     }
 }

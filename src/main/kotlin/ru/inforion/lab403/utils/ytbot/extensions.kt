@@ -1,12 +1,18 @@
+@file:Suppress("EmptyRange")
+
 package ru.inforion.lab403.utils.ytbot
 
-import com.google.common.base.Throwables
-import ru.inforion.lab403.common.extensions.asInt
-import ru.inforion.lab403.common.extensions.get
-import java.io.PrintWriter
-import java.io.StringWriter
+import ru.inforion.lab403.common.extensions.*
+import ru.inforion.lab403.utils.ytbot.youtrack.CategoryId
+import java.net.InetAddress
+import java.net.URI
+import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.reflect.KProperty
+
+fun Collection<CategoryId>.concat() = joinToString(",") { it.name }
+
+fun String.normalizeURL() = URI(this).normalize().toString()
 
 inline fun <reified T: Enum<T>>enumValuesCollection(collection: MutableCollection<T> = mutableListOf()) =
     enumValues<T>().toCollection(collection)
@@ -24,13 +30,11 @@ inline fun <reified T: Enum<T>>enumValuesCollection(collection: MutableCollectio
  *      Project::name
  * )
  */
-fun fields(vararg args: Any): String {
-    return args.joinToString(",") {
-        when (it) {
-            is KProperty<*> -> it.name
-            is String -> it
-            else -> throw IllegalArgumentException("Wrong class of $it")
-        }
+fun fields(vararg args: Any) = args.joinToString(",") {
+    when (it) {
+        is KProperty<*> -> it.name
+        is String -> it
+        else -> throw IllegalArgumentException("Wrong class of $it")
     }
 }
 
@@ -52,7 +56,7 @@ fun KProperty<*>.with(vararg args: Any) = "$name(${fields(*args)})"
  * @return grouped list
  */
 fun <S, T> Collection<T>.groupSeriesBy(selector: (T) -> S): List<Pair<S, Collection<T>>> {
-    if (this.isEmpty())
+    if (isEmpty())
         return emptyList()
 
     val result = ArrayList<Pair<S, Collection<T>>>()
@@ -86,17 +90,18 @@ fun String.removeChars(vararg chars: Char, ignoreCase: Boolean = false) = chars.
 fun String.removeChars(chars: String, ignoreCase: Boolean = false)
         = removeChars(*chars.toCharArray(), ignoreCase = ignoreCase)
 
-@Suppress("EmptyRange")
+inline val Int.asInetAddress: InetAddress get() = InetAddress.getByAddress(byteArrayOf(
+    this[31..24].asByte, this[23..16].asByte, this[15..8].asByte, this[7..0].asByte))
+
 inline val Int.asIPAddress get() = "${this[31..24]}.${this[23..16]}.${this[15..8]}.${this[7..0]}"
 
 inline val Long.asIPAddress get() = asInt.asIPAddress
 
-val Throwable.stackTraceAsString get(): String = Throwables.getStackTraceAsString(this)
+fun String.escapeMarkdown() =
+    replace("_", "\\_")
+    .replace("*", "\\*")
+    .replace("[", "\\[")  // escape ] not required
 
-inline fun <K, V>MutableMap<K, V>.putIfAbsent(key: K, block: () -> V): V? {
-    var v = get(key)
-    if (v == null) {
-        v = put(key, block())
-    }
-    return v
-}
+fun String.removeMarkdownCode() = replaceBetween("```", "```", "<multiline-code>")
+
+fun String.crop(size: Int) = if (length <= size) this else "${stretch(size)}..."

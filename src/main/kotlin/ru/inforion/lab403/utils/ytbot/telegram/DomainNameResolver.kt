@@ -2,7 +2,11 @@ package ru.inforion.lab403.utils.ytbot.telegram
 
 import ru.inforion.lab403.common.extensions.*
 import ru.inforion.lab403.utils.ytbot.asIPAddress
-import java.io.*
+import ru.inforion.lab403.utils.ytbot.asInetAddress
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.DataInputStream
+import java.io.DataOutputStream
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -27,18 +31,17 @@ class DomainNameResolver(val dnsServerIP: String, val dnsServerPort: Int = DNS_D
      *
      * @param domainName domain name to be resolved
      *
-     * @return collection of IP addresses resolved using DNS server
+     * @return list of IP addresses resolved using DNS server
      */
-    fun query(domainName: String): Collection<String> =
-        DatagramSocket(0).use { socket ->
-            socket.soTimeout = TIME_OUT
+    fun query(domainName: String) = DatagramSocket(0).use { socket ->
+        socket.soTimeout = TIME_OUT
 
-            val message = encodeDNSMessage(domainName)
-            sendRequest(socket, dnsServerIP, dnsServerPort, message)
+        val message = encodeDNSMessage(domainName)
+        sendRequest(socket, dnsServerIP, dnsServerPort, message)
 
-            val response = recvResponse(socket)
-            decodeDNSMessage(response)
-        }
+        val response = recvResponse(socket)
+        decodeDNSMessage(response)
+    }
 
     private fun sendRequest(socket: DatagramSocket, address: String, port: Int, stream: ByteArrayOutputStream) {
         val data = stream.toByteArray()
@@ -94,7 +97,7 @@ class DomainNameResolver(val dnsServerIP: String, val dnsServerPort: Int = DNS_D
         output.writeByte(0)
     }
 
-    private fun decodeDNSMessage(stream: ByteArrayInputStream): Collection<String> {
+    private fun decodeDNSMessage(stream: ByteArrayInputStream): List<InetAddress> {
         val input = DataInputStream(stream)
 
         // header
@@ -144,7 +147,7 @@ class DomainNameResolver(val dnsServerIP: String, val dnsServerPort: Int = DNS_D
             }
         }
 
-        return addresses.map { it.asIPAddress }
+        return addresses.map { it.asInetAddress }
     }
 
     private fun skipDomainName(input: DataInputStream) {

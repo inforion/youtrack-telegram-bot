@@ -1,144 +1,149 @@
 package ru.inforion.lab403.utils.ytbot
 
-import net.sourceforge.argparse4j.inf.Namespace
-import net.sourceforge.argparse4j.internal.HelpScreenException
-import ru.inforion.lab403.common.extensions.argparser
-import ru.inforion.lab403.common.extensions.flag
-import ru.inforion.lab403.common.extensions.variable
+import ru.inforion.lab403.common.extensions.BlockingValue
+import ru.inforion.lab403.common.extensions.argparse.parseArguments
+import ru.inforion.lab403.common.extensions.first
+import ru.inforion.lab403.common.extensions.loggerConfigure
+import ru.inforion.lab403.common.logging.Levels
 import ru.inforion.lab403.common.logging.logger
+import ru.inforion.lab403.common.logging.logger.Logger
+import ru.inforion.lab403.utils.ytbot.checkers.TelegramChecker
+import ru.inforion.lab403.utils.ytbot.checkers.YoutrackChecker
+import ru.inforion.lab403.utils.ytbot.common.TimestampFile
+import ru.inforion.lab403.utils.ytbot.common.YoutrackTelegramBot
 import ru.inforion.lab403.utils.ytbot.config.ApplicationConfig
-import ru.inforion.lab403.utils.ytbot.youtrack.Youtrack
-import java.util.logging.Level
+import java.io.File
+import java.security.KeyStore
+import java.security.cert.CertificateFactory
+import java.text.SimpleDateFormat
+import java.util.*
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLSocketFactory
+import javax.net.ssl.TrustManagerFactory
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
 
-class Application {
-    companion object {
-        private val log = logger(Level.FINE)
+object Application {
+    val log = logger()
 
-        private fun daemonize(
-            bot: YoutrackTelegramBot,
-            daemon: Int,
-            tgSendMessages: Boolean,
-            tgStartServices: Boolean
-        ) {
-            log.info { "Starting daemon... press enter to stop daemon" }
+    private fun daemonize(bot: YoutrackTelegramBot, options: Options) {
+        log.info { "Starting daemon... print 'quit' without quotes and enter to stop daemon" }
 
-            val lock = java.lang.Object()
-            var working = true
-            var currentLastTimestamp = bot.startLastTimestamp
+        val stopNotify = BlockingValue<Int>()
 
-            if (tgStartServices)
-                bot.createCommandServices()
+        if (!options.dontStartServices)
+            bot.createCommandServices()
 
-            val worker = thread {
-                synchronized(lock) {
-                    while (working) {
-                        bot.execute(tgSendMessages, currentLastTimestamp)
-                        currentLastTimestamp = bot.loadCurrentLastTimestamp()
-                        lock.wait(daemon * 1000L)
-                    }
-                }
+        val worker = thread {
+            while (stopNotify.poll(options.daemon * 1000L) == null) {
+                bot.execute(options)
             }
-
-            @Suppress("UNUSED_VARIABLE")
-            val reader = thread {
-                System.`in`.reader().read()
-                working = false
-                synchronized(lock) { lock.notifyAll() }
-            }
-
-            worker.join()
-
-            log.info { "Stopping youtrack-telegram-bot..." }
-
-            // If something goes wrong stop reader hardcore
-            System.`in`.close()
         }
 
-        @JvmStatic
-        fun main(args: Array<String>) {
-            val parser = argparser(
-                "youtrack-telegram-bot",
-                "Telegram bot to pass from Youtrack to Telegram channel").apply {
-                variable<String>("-c", "--config", required = true, help = "Path to the configuration file")
-                variable<Long>("-t", "--timestamp", required = false, help = "Redefine starting last update timestamp")
-                variable<Int>("-d", "--daemon", required = false, help = "Create daemon with specified update timeout in seconds (<= 86400)")
-                flag("-r", "--dont-send-messages", help = "Don't send messages to Telegram")
-                flag("-a", "--dont-start-services", help = "Don't start command services for Telegram when in daemon mode")
-                variable<String>("-tgc", "--check-telegram", required = false, help = "Send message to telegram and exit. Format [chatId:message]")
-                variable<String>("-ytc", "--check-youtrack", required = false, help = "Get project info from Youtrack. Format [projectName]")
+        val reader = System.`in`.bufferedReader()
+        do { val line = reader.readLine() } while (line != "quit")
+
+        stopNotify.offer(0)
+        worker.join()
+        log.info { "Stopping youtrack-telegram-bot..." }
+
+        exitProcess(0)
+    }
+
+    /**
+     * Function creates ssl socket factory for self-signed trusted certificate
+     */
+    private fun getSSLSocketFactory(file: File?): SSLSocketFactory {
+        if (file == null) return SSLSocketFactory.getDefault() as SSLSocketFactory
+
+        val certificate = CertificateFactory
+            .getInstance("X.509")
+            .generateCertificate(file.inputStream())
+
+        val keyStore = KeyStore
+            .getInstance(KeyStore.getDefaultType())
+            .also {
+                it.load(null, null)
+                it.setCertificateEntry("server", certificate)
             }
 
-            val options: Namespace = try {
-                parser.parseArgs(args)
-            } catch (ex: HelpScreenException) {
-                exitProcess(0)
-            }
+        val trustManagerFactory = TrustManagerFactory
+            .getInstance(TrustManagerFactory.getDefaultAlgorithm())
+            .also { it.init(keyStore) }
 
-            log.info { options.toString() }
+        val sslContext = SSLContext
+            .getInstance("TLS")
+            .also { it.init(null, trustManagerFactory.trustManagers, null) }
 
-            val configPath: String = options["config"]
-            val timestamp: Long? = options["timestamp"]
-            val tgSendMessages: Boolean = !(options["dont_send_messages"] ?: false)
-            val tgStartServices: Boolean = !(options["dont_start_services"] ?: false)
-            val daemon: Int = options["daemon"] ?: -1
-            val checkTelegram: String? = options["check_telegram"]
-            val checkYoutrack: String? = options["check_youtrack"]
+        return sslContext.socketFactory
+    }
 
-            val appConfig = ApplicationConfig.load(configPath)
+    @JvmStatic
+    fun main(args: Array<String>) {
+        val options = args.parseArguments<Options>()
 
-            var inCheckMode = false
+        log.info { options }
 
-            if (checkTelegram != null) {
-                log.warning { "Starting Telegram connection check with $checkTelegram" }
-                val telegramChecker = TelegramChecker(appConfig)
-                val data = checkTelegram.split(":")
-                // if unknown type -> start server
-                telegramChecker.check(project = data[0], type = data[1], message = data[2])
-                inCheckMode = true
-            }
+        options.loggingLevel?.loggerConfigure()
 
-            if (checkYoutrack != null) {
-                log.warning { "Starting Youtrack connection check with $checkTelegram" }
-                val youtrackChecker = YoutrackChecker(appConfig)
-                youtrackChecker.check(project = checkYoutrack)
-                inCheckMode = true
-            }
+        if (options.certificate != null) {
+            log.info { "Setting up trusted certificate: '${options.certificate}'" }
+            val factory = getSSLSocketFactory(options.certificate)
+            HttpsURLConnection.setDefaultSSLSocketFactory(factory)
+        }
 
-            if (inCheckMode) {
-                log.info { "youtrack-telegram-bot was in check mode... exiting" }
-                exitProcess(0)
-            }
+        val appConfig = ApplicationConfig.load(options.config)
 
-            if (daemon > 24 * 60 * 60) {
-                log.info { "Update period to slow..." }
-                exitProcess(-1)
-            }
+        val datetimeFormatter = SimpleDateFormat(appConfig.datetimeFormat).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
 
-            log.info { "$appConfig" }
+        var inCheckMode = false
 
-            val startingLastTimestamp = timestamp ?: appConfig.loadTimestamp()
+        options.checkTelegram?.let {
+            log.warning { "Starting Telegram connection check with $it" }
+            val telegramChecker = TelegramChecker(appConfig)
+            val data = it.split(":")
+            // if unknown type -> start server
+            telegramChecker.check(project = data[0], type = data[1], message = data[2])
+            inCheckMode = true
+        }
 
-            log.info { "Checking ${appConfig.timestampFilePath} to writing..." }
-            appConfig
-                .runCatching { saveTimestamp(startingLastTimestamp) }
-                .onFailure {
-                    log.severe { "File ${appConfig.timestampFilePath} can't be written" }
-                    exitProcess(-1)
-                }
+        options.checkYoutrack?.let {
+            log.warning { "Starting Youtrack connection check with $it" }
+            val youtrackChecker = YoutrackChecker(appConfig)
+            youtrackChecker.check(project = it)
+            inCheckMode = true
+        }
 
-            val bot = YoutrackTelegramBot(startingLastTimestamp, appConfig)
+        if (inCheckMode) {
+            log.info { "youtrack-telegram-bot was in check mode... exiting" }
+            exitProcess(0)
+        }
 
-            log.info {
-                val datetime = Youtrack.makeTimedate(startingLastTimestamp)
-                "Starting last timestamp=$startingLastTimestamp [$datetime] send=$tgSendMessages services=$tgStartServices"
-            }
+        if (options.daemon > 24 * 60 * 60) {
+            log.info { "Update period to slow..." }
+            exitProcess(-1)
+        }
+
+        log.info { "$appConfig" }
+
+        val timestampFile = TimestampFile(appConfig.timestampFilePath, datetimeFormatter).also {
+            log.config { "Validating timestamp file: '${appConfig.timestampFilePath}'" }
+            it.validateTimestampFile(appConfig.projects, options.timestamp)
+        }
+
+        val bot = YoutrackTelegramBot(appConfig, timestampFile, datetimeFormatter)
+
+        with(options) {
+            log.info { "Starting bot with options: send2Telegram=${!dontSendMessage} use services=${!dontStartServices}" }
             if (daemon > 0) {
-                daemonize(bot, daemon, tgSendMessages, tgStartServices)
+                // here we don't use options.timestamp because it redefined in timestamp file
+                daemonize(bot, options)
             } else {
-                bot.execute(tgSendMessages)
+                bot.execute(options)
             }
         }
     }
